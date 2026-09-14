@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/contexts/I18nContext";
 import { ChurnScoreChangeV2 } from "@/types/realtime-ranking-next";
+import { sanitizeRecentChanges } from "../_lib/board-utils";
 
 interface RecentChangesFeedProps {
     changes: ChurnScoreChangeV2[];
@@ -55,15 +56,22 @@ export default function RecentChangesFeed({ changes, limit = 30 }: RecentChanges
         return () => window.clearInterval(timer);
     }, []);
 
+    // Sanitize changes against upstream cache flapping & micro-delta inflation
+    const cleanChanges = useMemo(() => sanitizeRecentChanges(changes), [changes]);
+
     // Newest first, capped.
-    const sorted = [...changes].sort((a, b) => b.t - a.t).slice(0, limit);
+    const sorted = useMemo(() => [...cleanChanges].sort((a, b) => b.t - a.t).slice(0, limit), [cleanChanges, limit]);
 
     // Sum of positive deltas within the last hour.
     const cutoff = now - 3_600_000;
-    const total1h = changes
-        .filter((c) => c.t >= cutoff && c.delta > 0)
-        .reduce((acc, c) => acc + c.delta, 0);
-    const count1h = changes.filter((c) => c.t >= cutoff && c.delta > 0).length;
+    const total1h = useMemo(
+        () => cleanChanges.filter((c) => c.t >= cutoff && c.delta > 0).reduce((acc, c) => acc + c.delta, 0),
+        [cleanChanges, cutoff],
+    );
+    const count1h = useMemo(
+        () => cleanChanges.filter((c) => c.t >= cutoff && c.delta > 0).length,
+        [cleanChanges, cutoff],
+    );
 
     const scrollRef = useRef<HTMLDivElement>(null);
 

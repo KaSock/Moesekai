@@ -480,18 +480,44 @@ function getTierRanks(rank: number): [number | null, number | null] {
     return [lower > 0 ? lower : null, upper <= 100 ? upper : null];
 }
 
+/** Sanitize legacy recent score changes against flapping duplicates & micro-bursts. */
+function sanitizeLegacyChanges(recentChanges: { time: number; delta: number }[]): { time: number; delta: number }[] {
+    if (!recentChanges || recentChanges.length <= 1) return recentChanges ?? [];
+    const sorted = [...recentChanges].sort((a, b) => a.time - b.time);
+    const result: { time: number; delta: number }[] = [];
+    for (const c of sorted) {
+        if (result.length === 0) {
+            result.push({ ...c });
+            continue;
+        }
+        const prev = result[result.length - 1];
+        const dt = c.time - prev.time;
+        if (c.delta === prev.delta && dt < 55_000) continue;
+        if (dt < 45_000 && prev.delta >= 35_000 && c.delta >= 35_000) continue;
+        if (dt < 20_000 && c.delta < 25_000 && prev.delta < 25_000) {
+            prev.delta += c.delta;
+            prev.time = c.time;
+            continue;
+        }
+        result.push({ ...c });
+    }
+    return result;
+}
+
 /** Calculate total growth within the latest N minutes from recent_score_changes. */
 function calcRecentGrowth(recentChanges: { time: number; delta: number }[], minutes: number): number {
+    const clean = sanitizeLegacyChanges(recentChanges);
     const cutoff = Date.now() - minutes * 60 * 1000;
-    return recentChanges
+    return clean
         .filter((c) => c.time >= cutoff && c.delta > 0)
         .reduce((acc, c) => acc + c.delta, 0);
 }
 
 /** Calculate churn count within the latest N minutes from recent_score_changes. */
 function calcRecentChurnCount(recentChanges: { time: number; delta: number }[], minutes: number): number {
+    const clean = sanitizeLegacyChanges(recentChanges);
     const cutoff = Date.now() - minutes * 60 * 1000;
-    return recentChanges.filter((c) => c.time >= cutoff && c.delta > 0).length;
+    return clean.filter((c) => c.time >= cutoff && c.delta > 0).length;
 }
 
 /** Format score speed in k units. */

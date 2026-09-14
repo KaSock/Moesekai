@@ -220,7 +220,7 @@ const SHORTCUTS = [
     ),
   },
   {
-    href: "/prediction",
+    href: "/prediction-next",
     labelKey: "page.home.shortcuts.prediction",
     subLabel: "PREDICT",
     icon: (

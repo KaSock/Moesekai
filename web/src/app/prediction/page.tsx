@@ -1,8 +1,5 @@
-import PredictionClient from "./client";
-import { pageMetadata } from "@/lib/seo-metadata";
-
-export const generateMetadata = pageMetadata("prediction");
+import { redirect } from "next/navigation";
 
 export default function PredictionPage() {
-    return <PredictionClient />;
+    redirect("/prediction-next");
 }

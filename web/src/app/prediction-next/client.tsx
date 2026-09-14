@@ -775,17 +775,6 @@ export default function PredictionNextClient() {
                     <h1 className="text-3xl sm:text-4xl font-black text-primary-text">
                         {t("page.prediction.title")} <span className="text-miku">{t("page.prediction.titleHighlight")} Next</span>
                     </h1>
-
-                    {/* Back to classic link */}
-                    <div className="mt-4">
-                        <Link
-                            href="/prediction"
-                            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-miku dark:text-slate-300 dark:hover:text-miku transition-all shadow-sm"
-                        >
-                            <span>←</span>
-                            <span>{t("page.predictionNext.backToClassic")}</span>
-                        </Link>
-                    </div>
                 </div>
 
                 {/* Controls */}

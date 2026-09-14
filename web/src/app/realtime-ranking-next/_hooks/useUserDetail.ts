@@ -21,7 +21,7 @@ import {
     RealtimeRankingRegion,
     SeriesPoint,
 } from "@/types/realtime-ranking-next";
-import { entryKey, getTierRanks } from "../_lib/board-utils";
+import { entryKey, getTierRanks, sanitizeRecentChanges } from "../_lib/board-utils";
 import { useRealtimeRankingLine } from "@/lib/realtime-ranking-line";
 
 const DETAIL_POLL_INTERVAL = 10_000;
@@ -167,7 +167,12 @@ export function useUserDetail({ region, userId, worldLinkCharacterId }: UseUserD
             const churnMap = new Map<string, ChurnEntryV2>();
             for (const c of churnList) {
                 const isTierLine = c.userId == null;
-                churnMap.set(entryKey(c.rank, String(c.userId ?? ""), isTierLine), { ...c, isTierLine: isTierLine || undefined });
+                const cleanChanges = sanitizeRecentChanges(c.recent_score_changes ?? []);
+                churnMap.set(entryKey(c.rank, String(c.userId ?? ""), isTierLine), {
+                    ...c,
+                    recent_score_changes: cleanChanges,
+                    isTierLine: isTierLine || undefined,
+                });
             }
             const selfChurn = churnMap.get(userId);
 

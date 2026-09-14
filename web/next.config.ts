@@ -38,6 +38,16 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/prediction",
+        destination: "/prediction-next",
+        permanent: true,
+      },
+      {
+        source: "/prediction/:path*",
+        destination: "/prediction-next/:path*",
+        permanent: true,
+      },
+      {
         source: "/realtime-ranking",
         destination: "/realtime-ranking-next",
         permanent: true,

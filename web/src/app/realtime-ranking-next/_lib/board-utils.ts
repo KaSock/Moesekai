@@ -120,16 +120,61 @@ export function getSpeedTrend(speed1h: number, speed20min3: number): "up" | "dow
     return "flat";
 }
 
+/**
+ * Sanitize recent score changes against upstream cache flapping and micro-delta burst inflation:
+ * 1. Flapping de-duplication: Drops duplicate deltas occurring within < 55s (physical floor of live gameplay cycle).
+ * 2. High-frequency live jitter filter: Drops impossible consecutive manual live entries occurring < 45s apart.
+ * 3. Micro-delta clustering: Merges rapid consecutive non-live micro-increments (< 20s apart, e.g. MySEKAI item claims
+ *    or story reward popups) into a single batch entry so they do not artificially multiply the live play round count.
+ */
+export function sanitizeRecentChanges<T extends { t: number; delta: number }>(changes: T[]): T[] {
+    if (!changes || changes.length <= 1) return changes ? [...changes] : [];
+    const sorted = [...changes].sort((a, b) => a.t - b.t);
+    const result: T[] = [];
+
+    for (const c of sorted) {
+        if (result.length === 0) {
+            result.push({ ...c });
+            continue;
+        }
+        const prev = result[result.length - 1];
+        const dt = c.t - prev.t;
+
+        // 1. Exact duplicate delta within 55s (cache flapping bounce between replica nodes)
+        if (c.delta === prev.delta && dt < 55_000) {
+            continue;
+        }
+
+        // 2. Impossible manual live frequency (< 45s between two full lives)
+        if (dt < 45_000 && prev.delta >= 35_000 && c.delta >= 35_000) {
+            continue;
+        }
+
+        // 3. Cluster rapid micro-increments (< 20s apart, e.g. item harvests or reward claims)
+        if (dt < 20_000 && c.delta < 25_000 && prev.delta < 25_000) {
+            prev.delta += c.delta;
+            prev.t = c.t;
+            continue;
+        }
+
+        result.push({ ...c });
+    }
+
+    return result;
+}
+
 /** Sum positive deltas within the latest N minutes from recent_score_changes. */
 export function calcRecentGrowth(changes: { t: number; delta: number }[], minutes: number): number {
+    const clean = sanitizeRecentChanges(changes);
     const cutoff = Date.now() - minutes * 60 * 1000;
-    return changes.filter((c) => c.t >= cutoff && c.delta > 0).reduce((acc, c) => acc + c.delta, 0);
+    return clean.filter((c) => c.t >= cutoff && c.delta > 0).reduce((acc, c) => acc + c.delta, 0);
 }
 
 /** Count positive deltas within the latest N minutes. */
 export function calcRecentChurnCount(changes: { t: number; delta: number }[], minutes: number): number {
+    const clean = sanitizeRecentChanges(changes);
     const cutoff = Date.now() - minutes * 60 * 1000;
-    return changes.filter((c) => c.t >= cutoff && c.delta > 0).length;
+    return clean.filter((c) => c.t >= cutoff && c.delta > 0).length;
 }
 
 export interface HourlyGridCell {
