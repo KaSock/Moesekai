@@ -12,6 +12,8 @@ export const MEMBER_LINKS: Record<string, string> = {
     "虐酱": "https://space.bilibili.com/545144078",
     "@御明正": "https://space.bilibili.com/10820191",
     "御明正": "https://space.bilibili.com/10820191",
+    "@盐盐": "https://space.bilibili.com/13225124",
+    "盐盐": "https://space.bilibili.com/13225124",
 };
 
 export const MEMBER_LINK_URLS: string[] = Array.from(new Set(Object.values(MEMBER_LINKS)));

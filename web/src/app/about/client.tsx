@@ -203,10 +203,6 @@ export default function AboutClient() {
                         </div>
                         <div className="text-sm text-slate-600 leading-7 space-y-4">
                             <div>
-                                <span className="font-bold text-primary-text">{t("page.about.teams.literatureLabel")}</span>
-                                {renderMemberText(t("page.about.teams.literatureMembers"))}
-                            </div>
-                            <div>
                                 <span className="font-bold text-primary-text">{t("page.about.teams.translationLabel")}</span>
                                 {renderMemberText(t("page.about.teams.translationMembers"))}
                             </div>
@@ -220,7 +216,7 @@ export default function AboutClient() {
                             </div>
                             <div className="mt-4 pt-4 border-t border-slate-100">
                                 <p className="font-medium text-miku">
-                                    {t("page.about.teams.joinPrefix")} <span className="font-bold text-primary-text">1075068454</span> {t("page.about.teams.joinMiddle")}<span className="font-bold text-primary-text">{t("page.about.teams.joinGroup")}</span>{t("page.about.teams.joinSuffix")}
+                                    {t("page.about.teams.joinPrefix")} <span className="font-bold text-primary-text">972773827</span>{t("page.about.teams.joinSuffix")}
                                 </p>
                             </div>
                         </div>

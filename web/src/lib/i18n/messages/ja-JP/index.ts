@@ -1072,18 +1072,16 @@ export const jaJPMessages = {
       },
       teams: {
         title: 'Team Members',
-        literatureLabel: 'Moesekai Literature Team: ',
-        literatureMembers: '@惜花 @郁郁葱葱 @明日天気に @Aya @樱风 @荇荼 @性价比 @芒果冰沙拌玻璃渣 @luoxia @東雪 @魁灵 @茶椿 @Hakuchumu @瑞希 @幽灵塑料袋 @羽月',
         translationLabel: 'Moesekai Localization Team: ',
         translationMembers: '@雪莹ちゃん @忻羽 @虐酱 @御明正',
         artLabel: 'Moesekai Art Team: ',
-        artMembers: '@岓诚',
+        artMembers: '@岓诚 @黄Yell',
         guideLabel: 'Moesekai 攻略チーム: ',
-        guideMembers: '@Pizza @Misto @火狐mzk @阿木',
-        joinPrefix: 'If you want to help us, join',
-        joinMiddle: 'and ask for ',
-        joinGroup: 'Moesekai Literature Team',
-        joinSuffix: '.'
+        guideMembers: '@Pizza @Misto @火狐mzk @阿木 @盐盐',
+        joinPrefix: 'お手伝いいただける場合は、',
+        joinMiddle: '',
+        joinGroup: '',
+        joinSuffix: ' までお問い合わせください！'
       }
     },
     privacy: {
