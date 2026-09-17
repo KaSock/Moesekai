@@ -109,6 +109,12 @@ function pickByChance<T>(entries: Array<{ item: T; chance: number }>): T | null 
     return entries[entries.length - 1]?.item ?? null;
 }
 
+function isSelectableWishDetail(detail: IGachaDetail): boolean {
+    return detail.gachaDetailWishType === "normal"
+        || detail.gachaDetailWishType === "limited"
+        || (!!detail.isWish && !detail.gachaDetailWishType);
+}
+
 export default function GachaDetailClient() {
     const { t, formatDate } = useI18n();
     const _router = useRouter();    const params = useParams();
@@ -209,10 +215,10 @@ export default function GachaDetailClient() {
 
     const cardMap = useMemo(() => new Map(cards.map(card => [card.id, card])), [cards]);
 
-    const dreamPickNewPuCards = useMemo(() => {
+    const fixedWishCards = useMemo(() => {
         if (!gacha || !isWishPickGacha) return [] as ICardInfo[];
         return gacha.gachaDetails
-            .filter(detail => !detail.isWish)
+            .filter(detail => detail.gachaDetailWishType === "fixed")
             .map(detail => cardMap.get(detail.cardId))
             .filter((card): card is ICardInfo => !!card && card.cardRarityType === "rarity_4");
     }, [gacha, isWishPickGacha, cardMap]);
@@ -221,45 +227,36 @@ export default function GachaDetailClient() {
         if (!gacha || !isWishPickGacha) return [] as ICardInfo[];
         const wishDetails = gacha.gachaDetails.filter(detail => {
             const card = cardMap.get(detail.cardId);
-            return card?.cardRarityType === "rarity_4" && (detail.isWish || detail.gachaDetailWishType === "fixed");
+            return card?.cardRarityType === "rarity_4"
+                && detail.gachaDetailWishType !== "fixed"
+                && isSelectableWishDetail(detail);
         });
 
-        const list = wishDetails
+        return wishDetails
             .map(detail => cardMap.get(detail.cardId))
             .filter((card): card is ICardInfo => !!card);
-
-        if (list.length > 0) return list;
-
-        // Fallback: Return all 4★ cards in gachaDetails that are not new PU cards
-        const newPuCardIds = new Set(dreamPickNewPuCards.map(c => c.id));
-        return gacha.gachaDetails
-            .map(detail => cardMap.get(detail.cardId))
-            .filter((card): card is ICardInfo => !!card && card.cardRarityType === "rarity_4" && !newPuCardIds.has(card.id));
-    }, [gacha, isWishPickGacha, cardMap, dreamPickNewPuCards]);
-
-    const fixedWishCards = wishCandidateCards;
+    }, [gacha, isWishPickGacha, cardMap]);
 
     const selectedWishCards = useMemo(() => {
         if (!isWishPickGacha || selectedWishCardIds.length === 0) {
             return [] as ICardInfo[];
         }
         const selectedSet = new Set(selectedWishCardIds);
-        return fixedWishCards.filter(card => selectedSet.has(card.id));
-    }, [isWishPickGacha, fixedWishCards, selectedWishCardIds]);
+        return wishCandidateCards.filter(card => selectedSet.has(card.id));
+    }, [isWishPickGacha, wishCandidateCards, selectedWishCardIds]);
 
     const activePickupCards = useMemo(() => {
         if (!isWishPickGacha) return pickupCards;
-        return [...dreamPickNewPuCards, ...selectedWishCards];
-    }, [isWishPickGacha, dreamPickNewPuCards, selectedWishCards, pickupCards]);
-
-    const _fixedWishCardIds = useMemo(() => {
-        return new Set(fixedWishCards.map(card => card.id));
-    }, [fixedWishCards]);
+        return [...fixedWishCards, ...selectedWishCards];
+    }, [isWishPickGacha, fixedWishCards, selectedWishCards, pickupCards]);
 
     const dreamPickSelectionLimit = useMemo(() => {
         if (!gacha) return 10;
         if (gacha.wishSelectCount && gacha.wishSelectCount > 0) {
-            return gacha.wishSelectCount;
+            const fixedCount = gacha.gachaDetails.filter(
+                detail => detail.gachaDetailWishType === "fixed"
+            ).length;
+            return Math.max(0, gacha.wishSelectCount - fixedCount);
         }
         if (gacha.wishFixedSelectCount && gacha.wishFixedSelectCount > 0) {
             return gacha.wishFixedSelectCount;
@@ -268,16 +265,16 @@ export default function GachaDetailClient() {
     }, [gacha, wishCandidateCards.length]);
 
     useEffect(() => {
-        if (!isWishPickGacha || fixedWishCards.length === 0) {
+        if (!isWishPickGacha || wishCandidateCards.length === 0) {
             setSelectedWishCardIds([]);
             return;
         }
 
         setSelectedWishCardIds(prev => {
-            const validPrev = prev.filter(id => fixedWishCards.some(card => card.id === id));
+            const validPrev = prev.filter(id => wishCandidateCards.some(card => card.id === id));
             return validPrev.slice(0, dreamPickSelectionLimit);
         });
-    }, [isWishPickGacha, fixedWishCards, dreamPickSelectionLimit]);
+    }, [isWishPickGacha, wishCandidateCards, dreamPickSelectionLimit]);
 
     // Process full card pool list with details and rate share calculation
     const fullCardPool = useMemo(() => {
@@ -474,18 +471,23 @@ export default function GachaDetailClient() {
 
             const selectedSet = new Set(selectedWishCardIds);
 
-            // Selected wish cards (from user selection or fixed wish details)
-            const selectedWishDetails = allFourStarDetails.filter(detail =>
-                (detail.isWish || detail.gachaDetailWishType === "fixed") && selectedSet.has(detail.cardId)
+            const fixedWishDetails = allFourStarDetails.filter(
+                detail => detail.gachaDetailWishType === "fixed"
             );
 
-            // New pickup 4-star cards (non-wish PU cards)
-            const newPuDetails = allFourStarDetails.filter(detail => !detail.isWish && detail.gachaDetailWishType !== "fixed");
+            // User-selected cards never include the fixed PU cards.
+            const selectedWishDetails = allFourStarDetails.filter(detail =>
+                detail.gachaDetailWishType !== "fixed"
+                && isSelectableWishDetail(detail)
+                && selectedSet.has(detail.cardId)
+            );
+
+            const promotedDetails = [...fixedWishDetails, ...selectedWishDetails];
+            const promotedCardIds = new Set(promotedDetails.map(detail => detail.cardId));
 
             // Other 4-star cards in pool
             const otherDetails = allFourStarDetails.filter(detail =>
-                !selectedWishDetails.some(d => d.cardId === detail.cardId) &&
-                !newPuDetails.some(d => d.cardId === detail.cardId)
+                !promotedCardIds.has(detail.cardId)
             );
 
             // Calculate total 4-star rate
@@ -493,7 +495,6 @@ export default function GachaDetailClient() {
                 .filter(i => i !== -1)
                 .reduce((sum, i) => sum + (gachaRarityRates[i]?.rate || 0), 0) || 3.0;
 
-            const promotedDetails = [...selectedWishDetails, ...newPuDetails];
             const promotedCount = promotedDetails.length;
 
             let entries: Array<{ item: IGachaDetail; chance: number }> = [];
@@ -528,7 +529,7 @@ export default function GachaDetailClient() {
             }
 
             const pulled = pickByChance(entries) || allFourStarDetails[0] || null;
-            const countAsWishRate = pulled ? (pulled.isWish || pulled.gachaDetailWishType === "fixed") : true;
+            const countAsWishRate = pulled ? promotedCardIds.has(pulled.cardId) : true;
 
             return { pulled, countAsWishRate };
         };
@@ -1000,17 +1001,57 @@ export default function GachaDetailClient() {
                             <div className="space-y-4">
                                 {isWishPickGacha && (
                                     <div className="ios-glass-card rounded-2xl overflow-hidden">
-                                        <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-miku/5 to-transparent">
+                                        <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-miku/5 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                             <h2 className="font-bold text-slate-800 flex items-center gap-2">
                                                 <svg className="w-5 h-5 text-miku" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                                                 </svg>
                                                 {t("page.gacha.wishSelectTitle")}
                                             </h2>
+                                            {fullCardPool.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCardSelectorModalOpen(true)}
+                                                    className="px-3 py-1.5 bg-miku/10 hover:bg-miku hover:text-white text-miku text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shrink-0"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012 2v2M7 7h10" />
+                                                    </svg>
+                                                    {t("page.gacha.viewFullCardPool", { count: fullCardPool.length })}
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="p-4 space-y-4">
+                                            <div className="space-y-2">
+                                                <h3 className="text-sm font-bold text-slate-800">
+                                                    {t("page.gacha.fixedPuCardsTitle", { count: fixedWishCards.length })}
+                                                </h3>
+                                                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-1.5">
+                                                    {fixedWishCards.map(card => {
+                                                        const showTrained = getCardDefaultTrainedStatus(card) || (useTrainedThumbnail && isTrainableCard(card) && card.cardRarityType !== "rarity_birthday");
+                                                        const pullCount = history4Stars.filter(h => h.cardId === card.id).length;
+                                                        const isPulled = pullCount > 0;
+
+                                                        return (
+                                                            <Link key={card.id} href={`/cards/${card.id}`} className="group block">
+                                                                <div className={`rounded-lg overflow-hidden bg-white hover:shadow-lg transition-all ${isPulled ? 'ring-2 ring-green-400' : 'ring-1 ring-slate-200 hover:ring-miku'}`}>
+                                                                    <SekaiCardThumbnail card={card} trained={showTrained} className="w-full" />
+                                                                    {isPulled && (
+                                                                        <div className="flex items-center justify-center gap-0.5 bg-gradient-to-r from-green-500 to-green-400 text-white text-[8px] font-black py-0.5 leading-none">
+                                                                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                            </svg>
+                                                                            {pullCount > 1 && <span>×{pullCount}</span>}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                                                <div className="flex items-center justify-between gap-3 mb-3">
+                                                <div className="flex items-center justify-between gap-3">
                                                     <div>
                                                         <h3 className="text-sm font-bold text-slate-800">{t("page.gacha.wishSelectSubTitle")}</h3>
                                                     </div>
@@ -1026,64 +1067,64 @@ export default function GachaDetailClient() {
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-1.5">
-                                                {selectedWishCards.map(card => {
-                                                    const showTrained = getCardDefaultTrainedStatus(card) || (useTrainedThumbnail && isTrainableCard(card) && card.cardRarityType !== "rarity_birthday");
-                                                    const pullCount = history4Stars.filter(h => h.cardId === card.id).length;
-                                                    const isPulled = pullCount > 0;
+                                            {selectedWishCards.length > 0 && (
+                                                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-1.5">
+                                                    {selectedWishCards.map(card => {
+                                                        const showTrained = getCardDefaultTrainedStatus(card) || (useTrainedThumbnail && isTrainableCard(card) && card.cardRarityType !== "rarity_birthday");
+                                                        const pullCount = history4Stars.filter(h => h.cardId === card.id).length;
+                                                        const isPulled = pullCount > 0;
 
-                                                    return (
-                                                        <Link
-                                                            key={card.id}
-                                                            href={`/cards/${card.id}`}
-                                                            className="group block"
-                                                        >
-                                                            <div className={`rounded-lg overflow-hidden bg-white hover:shadow-lg transition-all ${isPulled ? 'ring-2 ring-green-400' : 'ring-1 ring-slate-200 hover:ring-miku'}`}>
-                                                                <SekaiCardThumbnail card={card} trained={showTrained} className="w-full" />
-                                                                {isPulled && (
-                                                                    <div className="flex items-center justify-center gap-0.5 bg-gradient-to-r from-green-500 to-green-400 text-white text-[8px] font-black py-0.5 leading-none">
-                                                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                        {pullCount > 1 && <span>×{pullCount}</span>}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </Link>
-                                                    );
-                                                })}
-                                            </div>
+                                                        return (
+                                                            <Link
+                                                                key={card.id}
+                                                                href={`/cards/${card.id}`}
+                                                                className="group block"
+                                                            >
+                                                                <div className={`rounded-lg overflow-hidden bg-white hover:shadow-lg transition-all ${isPulled ? 'ring-2 ring-green-400' : 'ring-1 ring-slate-200 hover:ring-miku'}`}>
+                                                                    <SekaiCardThumbnail card={card} trained={showTrained} className="w-full" />
+                                                                    {isPulled && (
+                                                                        <div className="flex items-center justify-center gap-0.5 bg-gradient-to-r from-green-500 to-green-400 text-white text-[8px] font-black py-0.5 leading-none">
+                                                                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                            </svg>
+                                                                            {pullCount > 1 && <span>×{pullCount}</span>}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="ios-glass-card rounded-2xl overflow-hidden">
-                                    <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-miku/5 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                        <h2 className="font-bold text-slate-800 flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-miku" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                                            </svg>
-                                            {isWishPickGacha 
-                                                ? t("page.gacha.newPuCardsTitle", { count: dreamPickNewPuCards.length }) 
-                                                : t("page.gacha.pickupCardsTitle", { count: pickupCards.length })
-                                            }
-                                        </h2>
-                                        {fullCardPool.length > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsCardSelectorModalOpen(true)}
-                                                className="px-3 py-1.5 bg-miku/10 hover:bg-miku hover:text-white text-miku text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shrink-0"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                {!isWishPickGacha && (
+                                    <div className="ios-glass-card rounded-2xl overflow-hidden">
+                                        <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-miku/5 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-miku" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                                                 </svg>
-                                                {t("page.gacha.viewFullCardPool", { count: fullCardPool.length })}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="p-4">
-                                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-2">
-                                            {(isWishPickGacha ? dreamPickNewPuCards : pickupCards).map(card => {
+                                                {t("page.gacha.pickupCardsTitle", { count: pickupCards.length })}
+                                            </h2>
+                                            {fullCardPool.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCardSelectorModalOpen(true)}
+                                                    className="px-3 py-1.5 bg-miku/10 hover:bg-miku hover:text-white text-miku text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shrink-0"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                                    </svg>
+                                                    {t("page.gacha.viewFullCardPool", { count: fullCardPool.length })}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="p-4">
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+                                            {pickupCards.map(card => {
                                                 const showTrained = getCardDefaultTrainedStatus(card) || (useTrainedThumbnail && isTrainableCard(card) && card.cardRarityType !== "rarity_birthday");
                                                 const pullCount = history4Stars.filter(h => h.cardId === card.id).length;
                                                 const isPulled = pullCount > 0;
@@ -1108,9 +1149,10 @@ export default function GachaDetailClient() {
                                                     </Link>
                                                 );
                                             })}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )}
 
