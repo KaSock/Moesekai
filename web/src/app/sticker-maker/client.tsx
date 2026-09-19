@@ -128,6 +128,9 @@ export default function StickerMakerContent() {
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
+    // Identifies the newest requested sticker so a slower earlier load cannot
+    // overwrite it.
+    const imgLoadSeqRef = useRef(0);
     const editorRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const stickerFileInputRef = useRef<HTMLInputElement>(null);
@@ -309,6 +312,7 @@ export default function StickerMakerContent() {
 
         // Load image
         setLoaded(false);
+        const seq = ++imgLoadSeqRef.current;
         const img = new Image(); // Browser Image
         img.crossOrigin = "anonymous";
 
@@ -317,6 +321,7 @@ export default function StickerMakerContent() {
         img.src = isDataUrl ? sticker.img : `${STICKER_MAKER_BASE_URL}/img/${sticker.img}`;
 
         img.onload = () => {
+            if (seq !== imgLoadSeqRef.current) return;
             imgRef.current = img;
             setLoaded(true);
         };
