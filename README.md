@@ -84,7 +84,7 @@ AGPL-3.0
 - **MASTER_DATA_PATH**: 可选本地 masterdata 缓存路径（默认 `./data/master`）。仓库不再提交完整 masterdata；本地文件缺失时 Go API 会从远端数据源加载。
 - **STATIC_ARCHIVE_DIR**: Next.js 静态文件归档持久化目录（默认 `./data/static_archive`）。在全量 Docker 容器部署时，启动脚本会自动将新构建的 `.next/static` 产物增量归档保存至该目录，防止新版本部署导致未刷新的在线客户端加载旧 Chunk JS 出现 404 错误。
 - **STATIC_CACHE_MAX_DAYS**: 静态归档产物保留天数（默认 `30`）；设为 `0` 禁用过期清理，其他值必须是非负整数。
-- **HTML_CACHE_DIR**: 可选 HTML 响应缓存目录；为空时禁用磁盘 HTML 缓存。
+- **HTML_CACHE_DIR**: HTML 响应缓存目录；留空时回落到默认目录（容器内 `/app/data/html_cache`，否则 `./data/html_cache`）。没有关闭磁盘 HTML 缓存的开关。
 - **NEXTJS_PORT**: 全量镜像内部 Next.js 监听端口（默认 `3000`），必须与外部 Go `PORT` 不同。
 
 ### 前端配置 (Next.js Web - standalone 部署)
