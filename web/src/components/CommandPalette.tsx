@@ -6,6 +6,7 @@ import { searchableNavItems, SEARCH_GROUP_LABEL_KEYS, SEARCH_GROUP_ROUTES, SEARC
 import { CHARACTER_NAMES } from "@/types/types";
 import { getPrimaryShortcutLabel, isKeyboardEventComposing } from "@/lib/shortcuts";
 import { fetchMusicAliases } from "@/lib/musicAliases";
+import { SEARCH_INDEX_URL } from "@/lib/lyrics-aliases.mjs";
 import { useI18n } from "@/contexts/I18nContext";
 import { getMotionTransition } from "@/lib/motion";
 
@@ -99,7 +100,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
             setIsLoadingIndex(true);
 
             // Aliases are optional and must not delay the primary multilingual index.
-            fetch("https://translation.exmeaning.com/data/search-index.json")
+            fetch(SEARCH_INDEX_URL)
                 .then((res) => res.json() as Promise<SearchIndexItem[]>)
                 .then((indexData) => {
                     setSearchIndex(indexData);

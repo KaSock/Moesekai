@@ -181,7 +181,12 @@ test("search-index consumers preserve n/cn, add en, and keep aliases separate", 
   assert.match(palette, /item\.cn && item\.cn\.toLowerCase\(\)\.includes\(q\)/);
   assert.match(palette, /item\.en && item\.en\.toLowerCase\(\)\.includes\(q\)/);
   assert.match(palette, /fetchMusicAliases/);
-  assert.ok(palette.includes(`fetch("${baseline.baseline.searchIndexUrl}")`));
+  assert.ok(palette.includes("fetch(SEARCH_INDEX_URL)"));
+  assert.ok(music.includes("fetch(SEARCH_INDEX_URL)"));
+  assert.equal(
+    readWeb("src/lib/lyrics-aliases.mjs").match(/SEARCH_INDEX_URL = "([^"]+)"/)[1],
+    baseline.baseline.searchIndexUrl,
+  );
   assert.match(music, /if \(item\.g !== "music"\) continue;/);
   assert.match(music, /if \(item\.cn\) cnMap\.set\(item\.id, item\.cn\)/);
   assert.match(music, /if \(item\.en\) enMap\.set\(item\.id, item\.en\)/);

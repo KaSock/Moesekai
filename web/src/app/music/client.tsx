@@ -28,6 +28,7 @@ import { useScrollRestore } from "@/hooks/useScrollRestore";
 import { fetchSongConstants, buildSongConstantsMap } from "@/lib/songConstants";
 import { useQuickFilter } from "@/contexts/QuickFilterContext";
 import { fetchMusicAliases } from "@/lib/musicAliases";
+import { SEARCH_INDEX_URL } from "@/lib/lyrics-aliases.mjs";
 import { fetchMusicBpmMap, MusicBpmEntry } from "@/lib/musicBpm";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -231,7 +232,7 @@ function MusicContent() {
                 setEventMusicIds(new Set(eventMusicsData.map((em) => em.musicId)));
                 setError(null);
 
-                fetch("https://translation.exmeaning.com/data/search-index.json")
+                fetch(SEARCH_INDEX_URL)
                     .then((res) => res.json() as Promise<SearchIndexItem[]>)
                     .then((searchIndexData) => {
                         const cnMap = new Map<number, string>();

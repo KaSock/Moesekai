@@ -614,7 +614,7 @@
       "routes": ["global command palette", "/music", "/lyrics"],
       "components": ["CommandPalette", "MusicContent", "LyricsClient"],
       "sourceType": "published-search-artifact",
-      "sourceFiles": ["data/search-index.json", "files/translation/lyrics/index.json"],
+      "sourceFiles": ["files/data/search-index.json", "files/translation/lyrics/index.json"],
       "fields": ["n", "cn", "en", "g", "c"],
       "stableId": "group plus entity id",
       "backendMapping": "search builder must retain n/cn and publish en",

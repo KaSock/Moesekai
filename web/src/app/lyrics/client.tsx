@@ -18,7 +18,7 @@ import {
     hasLyricsDetail,
     type ILyricsIndexEntry,
 } from "@/lib/lyrics";
-import { buildMusicAliasesById, LYRICS_ALIAS_INDEX_URL } from "@/lib/lyrics-aliases.mjs";
+import { buildMusicAliasesById, SEARCH_INDEX_URL } from "@/lib/lyrics-aliases.mjs";
 import { fetchLyricsMusicCatalog } from "@/lib/lyrics-music-source";
 import { replaceCurrentUrlSearchParams } from "@/lib/localized-path";
 import type { IMusicInfo, IMusicTagInfo, MusicCategoryType, MusicTagType } from "@/types/music";
@@ -83,7 +83,7 @@ function LyricsContent() {
         const timeout = window.setTimeout(() => controller.abort(), 8_000);
 
         // Aliases are optional and must not delay the primary lyrics catalog.
-        void fetch(LYRICS_ALIAS_INDEX_URL, { signal: controller.signal })
+        void fetch(SEARCH_INDEX_URL, { signal: controller.signal })
             .then((response) => {
                 if (!response.ok) throw new Error(`Search index HTTP ${response.status}`);
                 return response.json() as Promise<unknown>;
