@@ -303,7 +303,6 @@ function MultiplayerContent() {
     useEffect(() => { isRoundActiveRef.current = isRoundActive; }, [isRoundActive]);
     useEffect(() => { myGuessedRef.current = myGuessed; }, [myGuessed]);
     useEffect(() => { roundDataRef.current = roundData; }, [roundData]);
-    useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
     useEffect(() => { currentServerIdRef.current = currentServerId; }, [currentServerId]);
 
     // Image preloading state
@@ -1100,18 +1099,17 @@ function MultiplayerContent() {
 
         if (timerRef.current) clearInterval(timerRef.current);
 
+        // timeLeftRef carries the countdown so the host's round-end broadcast can
+        // run here rather than inside a setState updater, which React may replay.
         const interval = setInterval(() => {
-            setTimeLeft(prev => {
-                const newTime = Math.max(0, prev - 0.1);
-                timeLeftRef.current = newTime;
+            const newTime = Math.max(0, timeLeftRef.current - 0.1);
+            timeLeftRef.current = newTime;
+            setTimeLeft(newTime);
 
-                if (newTime <= 0 && isHostRef.current) {
-                    clearInterval(interval);
-                    hostProcessTimeout();
-                }
-
-                return newTime;
-            });
+            if (newTime <= 0 && isHostRef.current) {
+                clearInterval(interval);
+                hostProcessTimeout();
+            }
         }, 100);
 
         timerRef.current = interval;
