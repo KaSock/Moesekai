@@ -53,9 +53,16 @@ function LyricsContent() {
     useEffect(() => {
         let cancelled = false;
         const indexRequest = fetchLyricsIndex();
+        // Published lyrics follow the JP catalogue, so the ids drive the JP
+        // fallback in fetchLyricsMusicCatalog; without them every non-JP region
+        // silently drops songs its own masterdata has not caught up with.
+        const catalogRequest = indexRequest
+            .then((index) => new Set(index.songs.filter(hasLyricsDetail).map((song) => song.musicId)))
+            .catch(() => new Set<number>())
+            .then((publishedMusicIds) => fetchLyricsMusicCatalog(publishedMusicIds));
         Promise.all([
             indexRequest,
-            fetchLyricsMusicCatalog(new Set()),
+            catalogRequest,
             fetchMasterData<IMusicTagInfo[]>("musicTags.json"),
             fetchMasterData<{ musicId: number }[]>("eventMusics.json"),
         ])
