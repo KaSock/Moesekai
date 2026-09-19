@@ -32,6 +32,13 @@ import { IEventInfo } from '@/types/events';
 const BASE_URL = 'https://rk.exmeaning.com';
 const TARGET_TIERS = [50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 5000, 10000];
 
+/** World Link events award a far larger bonus ceiling, which drives the prior. */
+function isWorldLink(eventMeta: EventListItem | undefined): boolean {
+    return eventMeta?.event_type === 'world_bloom'
+        || (eventMeta?.name?.includes('WORLD LINK') ?? false)
+        || (eventMeta?.name?.includes('ワールドリンク') ?? false);
+}
+
 export async function fetchEventList(server: ServerType): Promise<EventListItem[]> {
     const cached = getCachedEventList(server);
     if (cached) return cached;
@@ -145,23 +152,13 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
         }
     }
 
-    const isWorldLinkEvent = eventMeta?.event_type === 'world_bloom'
-        || (eventMeta?.name?.includes('WORLD LINK') ?? false)
-        || (eventMeta?.name?.includes('ワールドリンク') ?? false)
-        || (server === 'jp' && eventId >= 210);
+    const isWorldLinkEvent = isWorldLink(eventMeta);
     const eventType = isWorldLinkEvent ? 'world_bloom' : (eventMeta?.event_type || 'marathon');
     const bonusPercent = isWorldLinkEvent ? 990 : 475;
 
-    // Try fetching tier-series if available
-    let tierSeriesMap: Record<string, { t: number; s: number }[]> = {};
-    try {
-        const seriesController = new AbortController();
-        const tid = setTimeout(() => seriesController.abort(), 2500);
-        tierSeriesMap = await fetchTierSeriesV2(server, { tiers: TARGET_TIERS }).catch(() => ({}));
-        clearTimeout(tid);
-    } catch {
-        tierSeriesMap = {};
-    }
+    // Tier-series is optional; fetchTierSeriesV2 carries its own 15s timeout.
+    const tierSeriesMap: Record<string, { t: number; s: number }[]> =
+        await fetchTierSeriesV2(server, { tiers: TARGET_TIERS }).catch(() => ({}));
 
     const tierScores = extractTierScoresFromEntries(latestSnapshot.entries);
     publishRankingSync({
@@ -348,9 +345,7 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                     eventEndAt = eventStartAt + (9 * 24 * 3600000);
                 }
 
-                const isWorldLinkEvent = eventMeta?.event_type === 'world_bloom'
-                    || (eventMeta?.name?.includes('WORLD LINK') ?? false)
-                    || (eventMeta?.name?.includes('ワールドリンク') ?? false);
+                const isWorldLinkEvent = isWorldLink(eventMeta);
                 const eventType = isWorldLinkEvent ? 'world_bloom' : (eventMeta?.event_type || 'marathon');
                 const bonusPercent = isWorldLinkEvent ? 990 : 475;
 
