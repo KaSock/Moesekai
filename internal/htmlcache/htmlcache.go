@@ -49,7 +49,6 @@ type lruItem struct {
 }
 type flight struct {
 	done chan struct{}
-	resp *cachedResponse
 }
 
 type WarmupStats struct {
@@ -180,12 +179,7 @@ func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	meta, recorded := c.fetch(r)
 	stored := meta != nil && c.store(key, meta, recorded.body.Bytes())
-	c.endFlight(key, func() *cachedResponse {
-		if stored {
-			return meta
-		}
-		return nil
-	}())
+	c.endFlight(key)
 	if stored {
 		if entry, _ := c.acquire(key); entry != nil {
 			serveFile(w, r, entry, "MISS")
@@ -364,12 +358,7 @@ func (c *Cache) store(key string, value *cachedResponse, body []byte) bool {
 	ok = true
 	value.path = finalPath
 
-	if c.cfg.Persistent {
-		c.writeDiskMeta(key, value)
-	}
-
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if old := c.items[key]; old != nil {
 		c.removeLocked(old)
 	}
@@ -379,7 +368,16 @@ func (c *Cache) store(key string, value *cachedResponse, body []byte) bool {
 	for c.bytes > c.cfg.MaxBytes || c.lru.Len() > c.cfg.MaxEntries {
 		c.removeLocked(c.lru.Back())
 	}
-	return c.items[key] == elem
+	stored := c.items[key] == elem
+	c.mu.Unlock()
+
+	// The sidecar is named after the cache key, not after the HTML file, so it
+	// must be written after eviction: retiring the previous entry for this key
+	// (or evicting this one right back out) deletes that same path.
+	if stored && c.cfg.Persistent {
+		c.writeDiskMeta(key, value)
+	}
+	return stored
 }
 
 func (c *Cache) acquire(key string) (*cachedResponse, string) {
@@ -441,10 +439,9 @@ func (c *Cache) beginFlight(key string) (*flight, bool) {
 	c.flights[key] = f
 	return f, true
 }
-func (c *Cache) endFlight(key string, resp *cachedResponse) {
+func (c *Cache) endFlight(key string) {
 	c.mu.Lock()
 	if f := c.flights[key]; f != nil {
-		f.resp = resp
 		delete(c.flights, key)
 		close(f.done)
 	}
@@ -461,7 +458,7 @@ func (c *Cache) refresh(key string, r *http.Request) {
 		if meta != nil {
 			_ = c.store(key, meta, recorded.body.Bytes())
 		}
-		c.endFlight(key, meta)
+		c.endFlight(key)
 	}()
 }
 

@@ -250,6 +250,54 @@ func TestPersistentCacheRestoresOnStartup(t *testing.T) {
 	}
 }
 
+func TestPersistentCacheSurvivesRestoreAfterRestore(t *testing.T) {
+	dir := t.TempDir()
+	var count atomic.Int32
+	cfg := Config{Dir: dir, Persistent: true}
+
+	// Two stores under the same key: the second one retires the first entry,
+	// and the sidecar path is derived from the key both times.
+	c1 := New(cacheableHandler(&count), cfg)
+	req := documentRequest("/zh-cn/cards/1/")
+	c1.ServeHTTP(httptest.NewRecorder(), req)
+	if !c1.store(cacheKey(req), &cachedResponse{
+		status:     http.StatusOK,
+		header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+		storedAt:   time.Now(),
+		freshUntil: time.Now().Add(time.Hour),
+		staleUntil: time.Now().Add(2 * time.Hour),
+	}, []byte("page-restored")) {
+		t.Fatal("second store did not take effect")
+	}
+
+	metas, err := filepath.Glob(filepath.Join(dir, "*.meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("want 1 sidecar after re-store, got %d", len(metas))
+	}
+
+	htmlFiles, err := filepath.Glob(filepath.Join(dir, "*.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(htmlFiles) != 1 {
+		t.Fatalf("want 1 html file after re-store, got %d (orphans left behind)", len(htmlFiles))
+	}
+
+	// A fresh instance must still adopt the entry from disk.
+	c2 := New(cacheableHandler(&count), cfg)
+	rr := httptest.NewRecorder()
+	c2.ServeHTTP(rr, documentRequest("/zh-cn/cards/1/"))
+	if got := rr.Header().Get("X-Moesekai-Cache"); got != "HIT" {
+		t.Fatalf("restored instance want HIT, got %s", got)
+	}
+	if rr.Body.String() != "page-restored" {
+		t.Fatalf("restored body = %q, want page-restored", rr.Body.String())
+	}
+}
+
 func TestWarmupPopulatesCache(t *testing.T) {
 	dir := t.TempDir()
 	var count atomic.Int32
