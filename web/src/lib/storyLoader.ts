@@ -197,7 +197,6 @@ export async function processScenarioForDisplay(
                         const verifiedStandardUrl = await getStandardVoiceUrl(
                             voiceUrlCache,
                             standardVoiceUrl,
-                            voiceId,
                             source
                         );
                         
@@ -208,7 +207,6 @@ export async function processScenarioForDisplay(
                                 console.log(`[StoryLoader] Standard URL not found, trying part_voice paths for ${chara2d.assetName}_${chara2d.unit}`);
                                 voiceUrl = await getPartVoiceUrl(
                                     voiceUrlCache,
-                                    scenarioId,
                                     voiceId,
                                     source,
                                     chara2d.assetName,

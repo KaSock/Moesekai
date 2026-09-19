@@ -8,7 +8,9 @@ import type { AssetSourceType } from "@/contexts/ThemeContext";
 
 /**
  * Voice URL cache to avoid redundant HEAD requests
- * Key format: `${region}-${voiceId}`
+ * Key format: `${source}-${voiceUrl}`. The relative path must be part of the key:
+ * the same voiceId is probed under several candidate paths, so keying on the id
+ * alone would make every fallback answer with the first path's result.
  * Value: resolved URL or null if not found
  */
 type VoiceUrlCache = Record<string, string | null>;
@@ -37,19 +39,17 @@ async function checkUrlExists(url: string): Promise<string | null> {
 /**
  * Fix/verify voice URL with caching
  * @param cache - Voice URL cache object
- * @param voiceId - Voice ID for cache key
  * @param voiceUrl - Relative voice URL path (without base URL)
  * @param source - Asset source type
  * @returns Full URL if exists, null if not found
  */
-export async function fixVoiceUrl(
+async function fixVoiceUrl(
     cache: VoiceUrlCache,
-    voiceId: string,
     voiceUrl: string,
     source: AssetSourceType
 ): Promise<string | null> {
     // Check cache first
-    const cacheKey = `${source}-${voiceId}`;
+    const cacheKey = `${source}-${voiceUrl}`;
     if (cacheKey in cache) {
         return cache[cacheKey];
     }
@@ -69,7 +69,6 @@ export async function fixVoiceUrl(
  * Implements the same logic as sekaibest's getTalkVoiceUrl for partvoice handling
  * 
  * @param cache - Voice URL cache
- * @param scenarioId - Scenario ID
  * @param voiceId - Voice ID (should start with "partvoice")
  * @param source - Asset source
  * @param chara2dAssetName - Character 2D asset name (e.g., "01ichika")
@@ -78,7 +77,6 @@ export async function fixVoiceUrl(
  */
 export async function getPartVoiceUrl(
     cache: VoiceUrlCache,
-    scenarioId: string,
     voiceId: string,
     source: AssetSourceType,
     chara2dAssetName: string,
@@ -91,7 +89,7 @@ export async function getPartVoiceUrl(
     // Path: sound/scenario/voice/part_voice_{chara}/{voiceId}.mp3
     if (chara.startsWith("v2_") || chara.startsWith("clb")) {
         const partVoiceUrl = `sound/scenario/voice/part_voice_${chara}/${voiceId}.mp3`;
-        const fixedUrl = await fixVoiceUrl(cache, voiceId, partVoiceUrl, source);
+        const fixedUrl = await fixVoiceUrl(cache, partVoiceUrl, source);
         if (fixedUrl) {
             console.log(`[VoiceFinder] Found part voice (v2/clb): ${fixedUrl}`);
             return fixedUrl;
@@ -104,7 +102,7 @@ export async function getPartVoiceUrl(
         
         // Try: sound/scenario/part_voice/{chara}/{voiceId}.mp3
         const partVoiceUrl1 = `sound/scenario/part_voice/${chara}/${voiceId}.mp3`;
-        const fixedUrl1 = await fixVoiceUrl(cache, voiceId, partVoiceUrl1, source);
+        const fixedUrl1 = await fixVoiceUrl(cache, partVoiceUrl1, source);
         if (fixedUrl1) {
             console.log(`[VoiceFinder] Found part voice (path 1): ${fixedUrl1}`);
             return fixedUrl1;
@@ -112,7 +110,7 @@ export async function getPartVoiceUrl(
 
         // Try: sound/scenario/voice/part_voice_{chara}/{voiceId}.mp3
         const partVoiceUrl2 = `sound/scenario/voice/part_voice_${chara}/${voiceId}.mp3`;
-        const fixedUrl2 = await fixVoiceUrl(cache, voiceId, partVoiceUrl2, source);
+        const fixedUrl2 = await fixVoiceUrl(cache, partVoiceUrl2, source);
         if (fixedUrl2) {
             console.log(`[VoiceFinder] Found part voice (path 2): ${fixedUrl2}`);
             return fixedUrl2;
@@ -128,15 +126,13 @@ export async function getPartVoiceUrl(
  * Get standard voice URL with verification
  * @param cache - Voice URL cache
  * @param voiceUrl - Relative voice URL path
- * @param voiceId - Voice ID for cache key
  * @param source - Asset source
  * @returns Full URL if exists, null if not found
  */
 export async function getStandardVoiceUrl(
     cache: VoiceUrlCache,
     voiceUrl: string,
-    voiceId: string,
     source: AssetSourceType
 ): Promise<string | null> {
-    return await fixVoiceUrl(cache, voiceId, voiceUrl, source);
+    return await fixVoiceUrl(cache, voiceUrl, source);
 }
