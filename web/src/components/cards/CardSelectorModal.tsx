@@ -439,9 +439,12 @@ export default function CardSelectorModal({
                                         </p>
                                         {item.actualRate > 0 && (
                                             <span className="shrink-0 text-[8px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded leading-none font-mono">
+                                                {/* Below 0.005 two decimals round a real draw rate down to 0.00%. */}
                                                 {item.actualRate >= 0.1
                                                     ? `${item.actualRate.toFixed(1)}%`
-                                                    : `${item.actualRate.toFixed(2)}%`}
+                                                    : item.actualRate >= 0.005
+                                                        ? `${item.actualRate.toFixed(2)}%`
+                                                        : "<0.01%"}
                                             </span>
                                         )}
                                     </div>
