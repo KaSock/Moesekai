@@ -748,9 +748,8 @@ function MultiplayerContent() {
 
             // Block bar
             if (!player.isDying && !isDead) {
-                const currentAttempts = player.attempts + 1;
                 const attemptCoeffs = [1.0, 0.5, 0.25];
-                const attemptCoeff = attemptCoeffs[Math.min(currentAttempts - 1, attemptCoeffs.length - 1)];
+                const attemptCoeff = attemptCoeffs[Math.min(player.attempts - 1, attemptCoeffs.length - 1)];
                 const blockAmount = (tl + 20) * 2.5 * attemptCoeff;
                 player.blockBar += blockAmount;
 

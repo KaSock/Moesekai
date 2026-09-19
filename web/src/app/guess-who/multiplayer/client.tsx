@@ -780,9 +780,8 @@ function MultiplayerContent() {
             // Block bar: ANY correct guess earns block (not just first-attempt)
             // But amount decays based on attempts: 100% for 1st, 50% for 2nd, 25% for 3rd+
             if (!player.isDying && !isDead) {
-                const currentAttempts = player.attempts + 1; // Use +1 because 'player' var is stale (pre-increment)
                 const attemptCoeffs = [1.0, 0.5, 0.25];
-                const attemptCoeff = attemptCoeffs[Math.min(currentAttempts - 1, attemptCoeffs.length - 1)];
+                const attemptCoeff = attemptCoeffs[Math.min(player.attempts - 1, attemptCoeffs.length - 1)];
                 const blockAmount = (tl + 20) * 2.5 * attemptCoeff; // Fixed 2.5x, no round multiplier
                 player.blockBar += blockAmount;
 
