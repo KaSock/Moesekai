@@ -14,11 +14,13 @@ import {
     CardRarityType,
     CardAttribute,
     SupportUnit,
+    ISkillInfo,
     getRarityNumber,
     isTrainableCard,
     getCardDefaultTrainedStatus,
 } from "@/types/types";
 import { fetchMasterDataForServer } from "@/lib/fetch";
+import { getCardSkillTypes } from "@/lib/skill";
 import { loadTranslations, TranslationData } from "@/lib/translations";
 import {
     getAccounts,
@@ -111,6 +113,7 @@ function MyCardsContent() {
 
     // Data state
     const [allCards, setAllCards] = useState<ICardInfo[]>([]);
+    const [skills, setSkills] = useState<ISkillInfo[]>([]);
     const [userCards, setUserCards] = useState<Map<number, UserCard>>(new Map());
     const [translations, setTranslations] = useState<TranslationData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -127,6 +130,7 @@ function MyCardsContent() {
     const [selectedRarities, setSelectedRarities] = useState<CardRarityType[]>([]);
     const [selectedSupplyTypes, setSelectedSupplyTypes] = useState<string[]>([]);
     const [selectedSupportUnits, setSelectedSupportUnits] = useState<SupportUnit[]>([]);
+    const [selectedSkillTypes, setSelectedSkillTypes] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState<string>("rarity");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -153,12 +157,13 @@ function MyCardsContent() {
         const rarities = searchParams.get("rarities");
         const supplyTypes = searchParams.get("supplyTypes");
         const supportUnits = searchParams.get("supportUnits");
+        const skillTypes = searchParams.get("skillTypes");
         const search = searchParams.get("search");
         const sort = searchParams.get("sortBy");
         const order = searchParams.get("sortOrder");
         const ownership = searchParams.get("ownership");
 
-        const hasUrlParams = chars || units || attrs || rarities || supplyTypes || supportUnits || search || sort || order || ownership;
+        const hasUrlParams = chars || units || attrs || rarities || supplyTypes || supportUnits || skillTypes || search || sort || order || ownership;
 
         if (hasUrlParams) {
             if (chars) setSelectedCharacters(chars.split(",").map(Number));
@@ -167,6 +172,7 @@ function MyCardsContent() {
             if (rarities) setSelectedRarities(rarities.split(",") as CardRarityType[]);
             if (supplyTypes) setSelectedSupplyTypes(supplyTypes.split(","));
             if (supportUnits) setSelectedSupportUnits(supportUnits.split(",") as SupportUnit[]);
+            if (skillTypes) setSelectedSkillTypes(skillTypes.split(","));
             if (search) setSearchQuery(search);
             if (sort) setSortBy(sort);
             if (order) setSortOrder(order as "asc" | "desc");
@@ -182,6 +188,7 @@ function MyCardsContent() {
                     if (filters.rarities?.length) setSelectedRarities(filters.rarities);
                     if (filters.supplyTypes?.length) setSelectedSupplyTypes(filters.supplyTypes);
                     if (filters.supportUnits?.length) setSelectedSupportUnits(filters.supportUnits);
+                    if (filters.skillTypes?.length) setSelectedSkillTypes(filters.skillTypes);
                     if (filters.search) setSearchQuery(filters.search);
                     if (filters.sortBy) setSortBy(filters.sortBy);
                     if (filters.sortOrder) setSortOrder(filters.sortOrder);
@@ -206,6 +213,7 @@ function MyCardsContent() {
             rarities: selectedRarities,
             supplyTypes: selectedSupplyTypes,
             supportUnits: selectedSupportUnits,
+            skillTypes: selectedSkillTypes,
             search: searchQuery,
             sortBy,
             sortOrder,
@@ -225,12 +233,13 @@ function MyCardsContent() {
         if (selectedRarities.length > 0) params.set("rarities", selectedRarities.join(","));
         if (selectedSupplyTypes.length > 0) params.set("supplyTypes", selectedSupplyTypes.join(","));
         if (selectedSupportUnits.length > 0) params.set("supportUnits", selectedSupportUnits.join(","));
+        if (selectedSkillTypes.length > 0) params.set("skillTypes", selectedSkillTypes.join(","));
         if (searchQuery) params.set("search", searchQuery);
         if (sortBy !== "rarity") params.set("sortBy", sortBy);
         if (sortOrder !== "desc") params.set("sortOrder", sortOrder);
         if (ownershipFilter !== "all") params.set("ownership", ownershipFilter);
         replaceCurrentUrlSearchParams(params);
-    }, [selectedCharacters, selectedUnitIds, selectedAttrs, selectedRarities, selectedSupplyTypes, selectedSupportUnits, searchQuery, sortBy, sortOrder, ownershipFilter, filtersInitialized]);
+    }, [selectedCharacters, selectedUnitIds, selectedAttrs, selectedRarities, selectedSupplyTypes, selectedSupportUnits, selectedSkillTypes, searchQuery, sortBy, sortOrder, ownershipFilter, filtersInitialized]);
 
     // Load accounts
     useEffect(() => {
@@ -257,9 +266,10 @@ function MyCardsContent() {
                 const server = activeAccount!.server;
 
                 // Fetch cards and supplies for the account's server
-                const [cardsData, suppliesData, translationsData] = await Promise.all([
+                const [cardsData, suppliesData, skillsData, translationsData] = await Promise.all([
                     fetchMasterDataForServer<ICardInfo[]>(server, "cards.json"),
                     fetchMasterDataForServer<CardSupply[]>(server, "cardSupplies.json").catch(() => []),
+                    fetchMasterDataForServer<ISkillInfo[]>(server, "skills.json").catch(() => [] as ISkillInfo[]),
                     loadTranslations(),
                 ]);
 
@@ -275,6 +285,7 @@ function MyCardsContent() {
                 }));
 
                 setAllCards(enhanced);
+                setSkills(skillsData);
                 setTranslations(translationsData);
             } catch (err) {
                 if (!cancelled) {
@@ -359,6 +370,21 @@ function MyCardsContent() {
                 return selectedSupportUnits.includes(c.supportUnit);
             });
         }
+        if (selectedSkillTypes.length > 0) {
+            result = result.filter((c) => {
+                const normalSkill = skills.find((s) => s.id === c.skillId);
+                const trainedSkill = c.specialTrainingSkillId
+                    ? skills.find((s) => s.id === c.specialTrainingSkillId)
+                    : undefined;
+
+                const cardSkillTypes = new Set<string>([
+                    ...getCardSkillTypes(normalSkill),
+                    ...getCardSkillTypes(trainedSkill),
+                ]);
+
+                return selectedSkillTypes.some((type) => cardSkillTypes.has(type));
+            });
+        }
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase().trim();
             const qNum = parseInt(q, 10);
@@ -414,7 +440,7 @@ function MyCardsContent() {
         });
 
         return result;
-    }, [allCards, selectedCharacters, selectedAttrs, selectedRarities, selectedSupplyTypes, selectedSupportUnits, searchQuery, sortBy, sortOrder, ownershipFilter, userCards, translations]);
+    }, [allCards, selectedCharacters, selectedAttrs, selectedRarities, selectedSupplyTypes, selectedSupportUnits, selectedSkillTypes, skills, searchQuery, sortBy, sortOrder, ownershipFilter, userCards, translations]);
 
     // Progress stats
     const progressStats = useMemo(() => {
@@ -437,6 +463,7 @@ function MyCardsContent() {
         setSelectedRarities([]);
         setSelectedSupplyTypes([]);
         setSelectedSupportUnits([]);
+        setSelectedSkillTypes([]);
         setSearchQuery("");
         setSortBy("rarity");
         setSortOrder("desc");
@@ -471,8 +498,8 @@ function MyCardsContent() {
             onSupplyTypeChange={setSelectedSupplyTypes}
             selectedSupportUnits={selectedSupportUnits}
             onSupportUnitChange={setSelectedSupportUnits}
-            selectedSkillTypes={[]}
-            onSkillTypeChange={() => {}}
+            selectedSkillTypes={selectedSkillTypes}
+            onSkillTypeChange={setSelectedSkillTypes}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             sortBy={sortBy}
@@ -492,6 +519,7 @@ function MyCardsContent() {
         selectedRarities,
         selectedSupplyTypes,
         selectedSupportUnits,
+        selectedSkillTypes,
         searchQuery,
         sortBy,
         sortOrder,
