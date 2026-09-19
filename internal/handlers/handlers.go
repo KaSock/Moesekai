@@ -234,8 +234,9 @@ func (h *Handler) handleGachaDetail(w http.ResponseWriter, r *http.Request) {
 	if !h.requireMasterData(w) {
 		return
 	}
+	// Registered as a subtree pattern, so reject anything past /api/gachas/{id}.
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
+	if len(parts) != 4 {
 		http.NotFound(w, r)
 		return
 	}

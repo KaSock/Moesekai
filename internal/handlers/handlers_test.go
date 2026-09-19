@@ -103,6 +103,70 @@ func TestGachaPaginationHandlesBoundedPages(t *testing.T) {
 	}
 }
 
+func TestRegisteredRoutesRejectExtraPathSegments(t *testing.T) {
+	mux := http.NewServeMux()
+	gachaHandlerForTest(t).RegisterRoutes(mux)
+
+	tests := []struct {
+		path       string
+		wantStatus int
+	}{
+		{path: "/api/gachas", wantStatus: http.StatusOK},
+		{path: "/api/gachas/1", wantStatus: http.StatusOK},
+		{path: "/api/gachas/", wantStatus: http.StatusNotFound},
+		{path: "/api/gachas/1/", wantStatus: http.StatusNotFound},
+		{path: "/api/gachas/1/anything", wantStatus: http.StatusNotFound},
+		{path: "/api/card-event-map", wantStatus: http.StatusOK},
+		{path: "/api/card-event-map/anything", wantStatus: http.StatusNotFound},
+		{path: "/api/music-event-map/anything", wantStatus: http.StatusNotFound},
+		{path: "/api/card-gacha-map/anything", wantStatus: http.StatusNotFound},
+		{path: "/api/event-virtuallive-map/anything", wantStatus: http.StatusNotFound},
+		{path: "/api/virtuallive-event-map/anything", wantStatus: http.StatusNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tt.path, nil))
+			if recorder.Code != tt.wantStatus {
+				t.Fatalf("GET %s status = %d, want %d", tt.path, recorder.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestGachaDetailServesTheRequestedGacha(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	gachaHandlerForTest(t).handleGachaDetail(recorder, httptest.NewRequest(http.MethodGet, "/api/gachas/2", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var response models.GachaDetailResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Gacha.ID != 2 {
+		t.Fatalf("gacha id = %d, want 2", response.Gacha.ID)
+	}
+}
+
+func TestGachaDetailReturnsJSONErrorForUnknownID(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	gachaHandlerForTest(t).handleGachaDetail(recorder, httptest.NewRequest(http.MethodGet, "/api/gachas/999", nil))
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+	var response map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response["error"] != "Gacha not found" {
+		t.Fatalf("error = %q, want %q", response["error"], "Gacha not found")
+	}
+}
+
 func TestMasterDataEndpointsReturnRetryableServiceUnavailableBeforeStartupLoad(t *testing.T) {
 	handler := New(masterdata.NewStore(t.TempDir()))
 	recorder := httptest.NewRecorder()
