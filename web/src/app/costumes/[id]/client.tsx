@@ -50,6 +50,7 @@ export default function CostumeDetailClient() {
     const params = useParams();
     const router = useRouter();
     const costumeNumber = Number(params.id);
+    const costumeIdLabel = Number.isFinite(costumeNumber) ? String(costumeNumber) : String(params.id ?? "");
     const { assetSource, useTrainedThumbnail } = useTheme();
     const { t } = useTranslation();
     const { t: tI18n, formatDate } = useI18n();
@@ -253,7 +254,7 @@ export default function CostumeDetailClient() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">{tI18n("page.costumes.notFoundTitle", { id: costumeNumber })}</h2>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">{tI18n("page.costumes.notFoundTitle", { id: costumeIdLabel })}</h2>
                         <p className="text-slate-500 mb-6">{tI18n("page.costumes.notFoundDesc")}</p>
                         <Link
                             href="/costumes"

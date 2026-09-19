@@ -16,6 +16,7 @@ import { fetchMangaData } from "@/lib/fetch";
 export default function MangaDetailClient() {
     const params = useParams();
     const mangaId = Number(params.id);
+    const mangaIdLabel = Number.isFinite(mangaId) ? String(mangaId) : String(params.id ?? "");
     const { setDetailName } = useBreadcrumb();
     const { t, formatDate } = useI18n();
 
@@ -117,7 +118,7 @@ export default function MangaDetailClient() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">{t("page.manga.notFoundTitle", { id: mangaId })}</h2>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">{t("page.manga.notFoundTitle", { id: mangaIdLabel })}</h2>
                         <p className="text-slate-500 mb-6">{t("page.manga.notFoundDesc")}</p>
                         <Link
                             href="/manga"
