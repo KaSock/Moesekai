@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -189,6 +190,9 @@ func (s *Server) loadMetadata() {
 		path := filepath.Join(dataDir, filename)
 		data, err := os.ReadFile(path)
 		if err != nil {
+			// Silence here is what hid the wrong JP filename: a missing map
+			// degrades the catalog to whatever the other layer happens to hold.
+			log.Printf("[mcp] metadata map %s unavailable: %v", filename, err)
 			return
 		}
 
@@ -240,7 +244,7 @@ func (s *Server) loadMetadata() {
 	}
 
 	// Load JP base then overlay CN translations
-	loadMap("metadata-map.json")
+	loadMap("metadata-map.jp.json")
 	loadMap("metadata-map.cn.json")
 }
 
