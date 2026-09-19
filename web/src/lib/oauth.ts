@@ -392,6 +392,23 @@ export async function exchangeCodeForToken(code: string, codeVerifier: string): 
     };
 }
 
+// RFC 6749 §5.2 codes that mean the grant itself is dead; every other failure is transient.
+const DEAD_GRANT_ERROR_CODES = new Set(["invalid_grant", "invalid_client", "unauthorized_client", "invalid_scope"]);
+
+async function readOAuthErrorCode(response: Response): Promise<string | null> {
+    try {
+        const body = await readJsonWithTimeout<{ error?: unknown } | null>(response);
+        return body && typeof body.error === "string" ? body.error : null;
+    } catch {
+        return null;
+    }
+}
+
+function isDeadGrantResponse(status: number, errorCode: string | null): boolean {
+    if (status !== 400 && status !== 401) return false;
+    return errorCode === null || DEAD_GRANT_ERROR_CODES.has(errorCode);
+}
+
 export async function refreshOAuthToken(refreshToken: string): Promise<OAuthTokenSet> {
     const config = assertOAuthConfig();
     const body = new URLSearchParams({
@@ -409,6 +426,9 @@ export async function refreshOAuthToken(refreshToken: string): Promise<OAuthToke
     });
 
     if (!response.ok) {
+        if (isDeadGrantResponse(response.status, await readOAuthErrorCode(response))) {
+            throw new Error("OAUTH_REAUTH_REQUIRED");
+        }
         throw new Error(`TOKEN_REFRESH_FAILED_${response.status}`);
     }
 

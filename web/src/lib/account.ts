@@ -389,6 +389,8 @@ async function fetchPublicGameData(server: ServerType, gameId: string, keys: str
     return res.json() as Promise<Record<string, unknown>>;
 }
 
+const pendingTokenRefreshes = new Map<string, Promise<OAuthTokenInfo>>();
+
 async function getRefreshedOAuthToken(account: MoesekaiAccount): Promise<OAuthTokenInfo> {
     const existing = account.oauthToken;
     if (!existing) {
@@ -398,24 +400,38 @@ async function getRefreshedOAuthToken(account: MoesekaiAccount): Promise<OAuthTo
     if (!expiresSoon) {
         return existing;
     }
-    if (!existing.refreshToken) {
+    const refreshToken = existing.refreshToken;
+    if (!refreshToken) {
         throw new Error("OAUTH_REAUTH_REQUIRED");
     }
 
-    const refreshed = await refreshOAuthToken(existing.refreshToken);
-    const nextToken: OAuthTokenInfo = {
-        accessToken: refreshed.accessToken,
-        refreshToken: refreshed.refreshToken,
-        expiresAt: refreshed.expiresAt,
-        tokenType: refreshed.tokenType,
-        scope: refreshed.scope,
-    };
-    updateAccount(account.id, {
-        oauthToken: nextToken,
-        oauthScopes: refreshed.scope,
-        authError: null,
+    // The server rotates refresh tokens, so parallel refreshes would invalidate each other.
+    const pending = pendingTokenRefreshes.get(account.id);
+    if (pending) {
+        return pending;
+    }
+
+    const refreshTask = (async () => {
+        const refreshed = await refreshOAuthToken(refreshToken);
+        const nextToken: OAuthTokenInfo = {
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            expiresAt: refreshed.expiresAt,
+            tokenType: refreshed.tokenType,
+            scope: refreshed.scope,
+        };
+        updateAccount(account.id, {
+            oauthToken: nextToken,
+            oauthScopes: refreshed.scope,
+            authError: null,
+        });
+        return nextToken;
+    })().finally(() => {
+        pendingTokenRefreshes.delete(account.id);
     });
-    return nextToken;
+
+    pendingTokenRefreshes.set(account.id, refreshTask);
+    return refreshTask;
 }
 
 export type AccountDataErrorCode = "API_NOT_PUBLIC" | "NOT_FOUND" | "OAUTH_REAUTH_REQUIRED" | "OAUTH_ACCESS_FAILED" | "NETWORK_ERROR";
@@ -469,7 +485,6 @@ export function normalizeAccountDataError(error: unknown): AccountDataErrorCode 
     if (
         message === "OAUTH_REAUTH_REQUIRED"
         || message === "OAUTH_TOKEN_MISSING"
-        || message.startsWith("TOKEN_REFRESH_FAILED_")
         || message.startsWith("AUTHORIZED_REQUEST_FAILED_401")
     ) {
         return "OAUTH_REAUTH_REQUIRED";
