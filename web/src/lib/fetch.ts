@@ -9,7 +9,7 @@
  */
 
 import { MOE_BGM_DURATIONS_URL, MOE_MUSIC_META_URL } from "./assets";
-import { getMasterDataCache, setMasterDataCache, isIndexedDBAvailable } from "./masterdata-cache";
+import { getMasterDataCache, setMasterDataCache, isIndexedDBAvailable, MASTERDATA_CACHE_GLOBAL_SCOPE } from "./masterdata-cache";
 import { defaultContentRegionForPathname } from "./locale-routing";
 import { applyMasterdataPatches, patchFileForPath } from "./masterdata-patches";
 import type { IMusicMeta } from "@/types/music";
@@ -194,7 +194,7 @@ export async function fetchMasterData<T>(
         // Try reading from IndexedDB (skip if force-refreshing)
         if (!shouldNoCache) {
             try {
-                const cached = await getMasterDataCache<T>(path, localVersion);
+                const cached = await getMasterDataCache<T>(activeServer, path, localVersion);
                 if (cached !== null) {
                     // Apply post-patches on the cached (original) payload
                     const file = patchFileForPath(path);
@@ -217,7 +217,7 @@ export async function fetchMasterData<T>(
             const data: T = await response.json();
             // Write RAW data to IndexedDB cache (patches stay ephemeral)
             if (!isCustomServer && isIndexedDBAvailable() && localVersion) {
-                setMasterDataCache(path, data, localVersion).catch(() => { });
+                setMasterDataCache(activeServer, path, data, localVersion).catch(() => { });
             }
             const file = patchFileForPath(path);
             if (file !== null) {
@@ -243,7 +243,7 @@ export async function fetchMasterData<T>(
 
     // Write RAW data to IndexedDB cache
     if (!isCustomServer && isIndexedDBAvailable() && localVersion) {
-        setMasterDataCache(path, fallbackData, localVersion).catch(() => { });
+        setMasterDataCache(activeServer, path, fallbackData, localVersion).catch(() => { });
     }
 
     const fallbackFile = patchFileForPath(path);
@@ -435,7 +435,7 @@ export async function fetchMusicMetas(noCache: boolean = false): Promise<IMusicM
         // Try IndexedDB first
         if (!noCache && isIndexedDBAvailable()) {
             try {
-                const cached = await getMasterDataCache<IMusicMeta[]>("music_metas.json", localVersion);
+                const cached = await getMasterDataCache<IMusicMeta[]>(MASTERDATA_CACHE_GLOBAL_SCOPE, "music_metas.json", localVersion);
                 if (cached && Array.isArray(cached) && cached.length > 0) {
                     cachedMusicMetasMemory = cached;
                     return cached;
@@ -454,7 +454,7 @@ export async function fetchMusicMetas(noCache: boolean = false): Promise<IMusicM
                 const data: IMusicMeta[] = await response.json();
                 cachedMusicMetasMemory = data;
                 if (isIndexedDBAvailable()) {
-                    setMasterDataCache("music_metas.json", data, localVersion).catch(() => {});
+                    setMasterDataCache(MASTERDATA_CACHE_GLOBAL_SCOPE, "music_metas.json", data, localVersion).catch(() => {});
                 }
                 return data;
             }
@@ -472,7 +472,7 @@ export async function fetchMusicMetas(noCache: boolean = false): Promise<IMusicM
         const fallbackData: IMusicMeta[] = await fallbackResponse.json();
         cachedMusicMetasMemory = fallbackData;
         if (isIndexedDBAvailable()) {
-            setMasterDataCache("music_metas.json", fallbackData, localVersion).catch(() => {});
+            setMasterDataCache(MASTERDATA_CACHE_GLOBAL_SCOPE, "music_metas.json", fallbackData, localVersion).catch(() => {});
         }
         return fallbackData;
     })().finally(() => {

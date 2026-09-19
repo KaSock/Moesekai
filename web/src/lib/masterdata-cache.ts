@@ -13,7 +13,7 @@ const STORE_TRANSLATIONS = "translations";
 
 // Cache entry structure
 interface CacheEntry<T = unknown> {
-    path: string;       // key: file path (e.g. "cards.json")
+    path: string;       // key: "<server>/<file path>" (e.g. "cn/cards.json")
     data: T;            // the JSON payload
     version: string;    // masterdata version when cached
     cachedAt: number;   // timestamp
@@ -115,11 +115,25 @@ async function idbClear(storeName: string): Promise<void> {
 // ==================== MasterData Cache ====================
 
 /**
+ * Cache key for a masterdata file. The game server must be part of it: every
+ * region publishes the same file names under its own domain path, and two
+ * regions can report the same dataVersion, so a path+version key alone lets one
+ * region's payload be served for another.
+ * Region-independent files (e.g. the shared music_metas.json CDN artifact) use
+ * MASTERDATA_CACHE_GLOBAL_SCOPE.
+ */
+export const MASTERDATA_CACHE_GLOBAL_SCOPE = "global";
+
+function masterDataCacheKey(scope: string, path: string): string {
+    return `${scope}/${path}`;
+}
+
+/**
  * Get cached masterdata if version matches
  */
-export async function getMasterDataCache<T>(path: string, version: string): Promise<T | null> {
+export async function getMasterDataCache<T>(scope: string, path: string, version: string): Promise<T | null> {
     try {
-        const entry = await idbGet<CacheEntry<T>>(STORE_MASTERDATA, path);
+        const entry = await idbGet<CacheEntry<T>>(STORE_MASTERDATA, masterDataCacheKey(scope, path));
         if (entry && entry.version === version) {
             return entry.data;
         }
@@ -132,10 +146,10 @@ export async function getMasterDataCache<T>(path: string, version: string): Prom
 /**
  * Save masterdata to cache
  */
-export async function setMasterDataCache<T>(path: string, data: T, version: string): Promise<void> {
+export async function setMasterDataCache<T>(scope: string, path: string, data: T, version: string): Promise<void> {
     try {
         const entry: CacheEntry<T> = {
-            path,
+            path: masterDataCacheKey(scope, path),
             data,
             version,
             cachedAt: Date.now(),
