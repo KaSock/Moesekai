@@ -713,7 +713,7 @@ export default function MusicDetailPage() {
                             </div>
 
                             {/* Difficulty Grid */}
-                            <div className="p-4 grid grid-cols-5 gap-2">
+                            <div className={`p-4 grid gap-2 ${difficulties.length > 5 ? "grid-cols-6" : "grid-cols-5"}`}>
                                 {difficulties.map((diff) => (
                                     <button
                                         key={diff.musicDifficulty}
