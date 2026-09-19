@@ -91,14 +91,30 @@ self.addEventListener("fetch", (event) => {
                 return cached;
             }
 
-            // 2. Not in cache, fetch from network
+            // 2. Not in cache, fetch from network.
+            // A cross-origin <img> issues a no-cors request, whose response is
+            // opaque: status 0, ok false, and replayable only to another no-cors
+            // request. Every CACHEABLE_DOMAIN answers with
+            // Access-Control-Allow-Origin: *, so refetching in cors mode yields a
+            // readable status and an entry any consumer can be served from.
             try {
-                const response = await fetch(request);
+                let response;
+                try {
+                    response = await fetch(request.url, { mode: "cors", credentials: "omit" });
+                } catch {
+                    response = await fetch(request);
+                }
 
                 // Only cache successful responses
                 if (response.ok) {
-                    // Clone before consuming
-                    cache.put(request, response.clone()).then(() => trimCache(cache));
+                    // Clone before consuming; waitUntil keeps the worker alive for the write.
+                    const copy = response.clone();
+                    event.waitUntil(
+                        cache
+                            .put(request, copy)
+                            .then(() => trimCache(cache))
+                            .catch((error) => console.warn("[SW] Cache write failed:", error))
+                    );
                 }
 
                 return response;
