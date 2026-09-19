@@ -273,6 +273,10 @@ func NewNegotiationMiddleware(next http.Handler) http.Handler {
 		// Client wants markdown. Request HTML upstream (from cache or Next.js).
 		clonedReq := r.Clone(r.Context())
 		clonedReq.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		// The recorder buffers the body in-process and the converter reads it as
+		// text, so a compressed upstream response would parse as garbage. The
+		// htmlcache layer does the same before its own upstream fetch.
+		clonedReq.Header.Del("Accept-Encoding")
 
 		rec := &responseRecorder{
 			header: make(http.Header),

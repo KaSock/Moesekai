@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"compress/gzip"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -157,5 +158,34 @@ func TestNegotiationMiddleware(t *testing.T) {
 	body := rec2.Body.String()
 	if !strings.Contains(body, "# Test Page") {
 		t.Errorf("Markdown missing heading: %s", body)
+	}
+}
+
+// The htmlcache layer strips Accept-Encoding before its own upstream fetch, so
+// cached pages reach the converter uncompressed. Requests it declines to cache
+// (query string, RSC headers, prefetch, cache not ready) go straight to the
+// Next.js proxy, which honours whatever encoding the client asked for.
+func TestNegotiationMiddlewareStripsAcceptEncoding(t *testing.T) {
+	const page = `<html><head><title>Test Page</title></head><body><article class="sr-only"><h2>Detail</h2></article></body></html>`
+	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			gz := gzip.NewWriter(w)
+			_, _ = gz.Write([]byte(page))
+			_ = gz.Close()
+			return
+		}
+		_, _ = w.Write([]byte(page))
+	})
+
+	req, _ := http.NewRequest("GET", "http://localhost/zh-cn/music/74/?sortBy=id", nil)
+	req.Header.Set("Accept", "text/markdown")
+	req.Header.Set("Accept-Encoding", "gzip, br")
+	rec := httptest.NewRecorder()
+	NewNegotiationMiddleware(backend).ServeHTTP(rec, req)
+
+	if got := rec.Body.String(); !strings.Contains(got, "# Test Page") {
+		t.Errorf("compressed upstream body parsed as HTML; markdown degraded to the generic stub:\n%s", got)
 	}
 }
