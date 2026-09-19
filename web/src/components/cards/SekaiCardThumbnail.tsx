@@ -24,6 +24,9 @@ export default function SekaiCardThumbnail({
     const { assetSource: themeAssetSource } = useTheme();
     const assetSource = customAssetSource ?? themeAssetSource;
     const [imageError, setImageError] = React.useState(false);
+    // Card grids render many of these; a literal id would collide and every
+    // clipPath reference would resolve to the first instance in the document.
+    const clipId = `cardClip-${React.useId()}`;
 
     // Determine trained status
     // Logic: If trained prop is provided, use it. Otherwise, default to false (normal).
@@ -140,7 +143,7 @@ export default function SekaiCardThumbnail({
                     React handles this usually.
                  */}
                 <defs>
-                    <clipPath id="cardClip">
+                    <clipPath id={clipId}>
                         <rect x="2" y="2" width="152" height="152" rx="10" ry="10" />
                     </clipPath>
                 </defs>
@@ -155,7 +158,7 @@ export default function SekaiCardThumbnail({
                     width="152"
                     height="152"
                     preserveAspectRatio="xMidYMid slice"
-                    clipPath="url(#cardClip)"
+                    clipPath={`url(#${clipId})`}
                     onError={() => setImageError(true)}
                 />
 
