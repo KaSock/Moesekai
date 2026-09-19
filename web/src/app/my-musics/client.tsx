@@ -584,7 +584,7 @@ function MyMusicsContent() {
             result = result.filter(m => {
                 if (m.id === qNum) return true;
                 if (m.title.toLowerCase().includes(q)) return true;
-                const cn = translations?.music?.title?.[m.id.toString()];
+                const cn = translations?.music?.title?.[m.title];
                 if (cn && cn.toLowerCase().includes(q)) return true;
                 return false;
             });
