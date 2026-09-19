@@ -143,7 +143,8 @@ export default function CardSelectorModal({
             const totalWeight = weightByRarity[rarity] || (detail?.weight || 1);
             const weight = detail?.weight || 1;
             const rarityRate = rarityBaseRate[rarity] ?? 3.0;
-            const actualRate = totalWeight > 0 ? (rarityRate * weight) / totalWeight : 0;
+            // Without a gacha detail the fallback weights collapse to the flat rarity rate, which is not a draw rate.
+            const actualRate = detail && totalWeight > 0 ? (rarityRate * weight) / totalWeight : 0;
             const isPickup = pickupSet.has(card.id);
             const supplyType =
                 card.cardSupplyType ||
