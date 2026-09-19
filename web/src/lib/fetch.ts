@@ -333,9 +333,6 @@ export const MASTERDATA_VERSION_KEY = "masterdata-version";
  * Fetch master data for a specific game server (cn/jp/tw/kr/en)
  * Unlike fetchMasterData(), this does NOT use the global localStorage server setting.
  * Used by features that need server-specific masterdata (e.g., card progress page).
- * - cn → sekaimaster-cn
- * - jp → sekaimaster (jp)
- * - tw/kr/en → sekaimaster-cn (same as cn)
  *
  * NOTE: Intentionally bypasses IndexedDB cache because this targets a specific server
  * independent of the global version, so the version-keyed cache would be incorrect.
@@ -347,7 +344,7 @@ export async function fetchMasterDataForServer<T>(server: "cn" | "jp" | "tw" | "
 
     const file = patchFileForPath(path);
 
-    const primaryUrl = `https://metadata.exmeaning.com/${server}/master/${path}${query}`;
+    const primaryUrl = `${getMasterBaseUrl(server)}/${path}${query}`;
     try {
         const response = await fetchWithCompression(primaryUrl);
         if (response.ok) {
@@ -356,7 +353,7 @@ export async function fetchMasterDataForServer<T>(server: "cn" | "jp" | "tw" | "
         }
     } catch { /* fall through */ }
 
-    const fallbackUrl = `https://metadata.pjsk.moe/${server}/master/${path}${query}`;
+    const fallbackUrl = `${getFallbackMasterBaseUrl(server)}/${path}${query}`;
     const fallbackResponse = await fetchWithCompression(fallbackUrl);
     if (!fallbackResponse.ok) {
         throw new Error(`Failed to fetch ${path} for server ${server}`);
