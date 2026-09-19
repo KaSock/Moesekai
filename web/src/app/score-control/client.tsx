@@ -283,6 +283,14 @@ export default function ScoreControlClient() {
         dbWorkerRef.current = w;
     }, [deckBuilderEnabled]);
 
+    // Terminate the persistent worker when leaving the page.
+    useEffect(() => {
+        return () => {
+            dbWorkerRef.current?.terminate();
+            dbWorkerRef.current = null;
+        };
+    }, []);
+
     // ====== Infinite Song Search State ======
     const [infiniteSearchEnabled, setInfiniteSearchEnabled] = useState(false);
     const [infiniteSearchRunning, setInfiniteSearchRunning] = useState(false);
@@ -512,6 +520,7 @@ export default function ScoreControlClient() {
                     new URL("@/lib/deck-recommend/deck-builder-worker.ts", import.meta.url)
                 );
             }
+            const w = dbWorkerRef.current;
 
             // Single worker: only the tiers from the route planning are searched
             // (a handful), so a single round trip is enough.
@@ -531,13 +540,10 @@ export default function ScoreControlClient() {
             };
 
             const startTime = performance.now();
-            const w = new Worker(
-                new URL("@/lib/deck-recommend/deck-builder-worker.ts", import.meta.url)
-            );
-            dbWorkerRef.current = w;
 
             w.onmessage = (event) => {
                 const data = event.data;
+                if ("warm" in data) return; // warmup ack from the pre-warm effect
                 if (data.error) {
                     setDbError(getErrorMessage(data.error, t));
                     // Fallback routes
