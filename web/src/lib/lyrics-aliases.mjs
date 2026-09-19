@@ -2,7 +2,9 @@
  * Public NextTrans search index. Serves both the multilingual entity search
  * (n/cn/en/g/c) and the per-music alias list (a), so every consumer shares one URL.
  */
-export const SEARCH_INDEX_URL = "https://translation.exmeaning.com/files/data/search-index.json";
+// The v2 index is the same entries plus the optional `en` field that the
+// music page and the command palette read; the legacy path cannot carry it.
+export const SEARCH_INDEX_URL = "https://translation.exmeaning.com/files/v2/data/search-index.json";
 
 /**
  * Parse the shared NextTrans search index into stable music-ID aliases.

@@ -4,8 +4,8 @@
     "sourceCommit": "fdadfb9",
     "purpose": "Immutable representative fixture for the pre-locale, pre-lyrics Moesekai behavior",
     "translationBaseUrl": "https://translation.exmeaning.com/translation",
-    "searchIndexUrl": "https://translation.exmeaning.com/files/data/search-index.json",
-    "searchIndexUrlNote": "Corrected on 2026-09-19: the captured value omitted the /files prefix that the backend actually serves, so both consumers silently received the SPA HTML shell."
+    "searchIndexUrl": "https://translation.exmeaning.com/files/v2/data/search-index.json",
+    "searchIndexUrlNote": "Corrected on 2026-09-19: the captured value omitted the /files prefix that the backend actually serves, so both consumers silently received the SPA HTML shell; repointed to the v2 path, the only one whose entries can carry the en field the consumers read."
   },
   "translationFileOrder": [
     "cards",
