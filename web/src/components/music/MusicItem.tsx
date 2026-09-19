@@ -101,22 +101,6 @@ export default function MusicItem({ music, isSpoiler, constant, difficulties, sh
                             )}
                         </div>
                     )}
-
-                    {/* Top-left jacket badges use the same compact overlay language as the ID badge. */}
-                    {(jacketTopLeftLabel || isSpoiler) && (
-                        <div className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
-                            {jacketTopLeftLabel && (
-                                <span className={JACKET_OVERLAY_BADGE_CLASS}>
-                                    {jacketTopLeftLabel}
-                                </span>
-                            )}
-                            {isSpoiler && (
-                                <span className="rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold leading-4 text-white shadow-sm">
-                                    {t("common.badge.spoiler")}
-                                </span>
-                            )}
-                        </div>
-                    )}
                 </div>
 
                 {/* Info */}
