@@ -114,8 +114,10 @@ export default function MysekaiFixtureDetailClient() {
                 setIsLoading(false);
             }
         }
-        if (fixtureId) {
+        if (Number.isFinite(fixtureId)) {
             fetchData();
+        } else {
+            setIsLoading(false);
         }
     }, [fixtureId, t]);
 

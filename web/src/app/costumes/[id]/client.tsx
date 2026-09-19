@@ -110,8 +110,10 @@ export default function CostumeDetailClient() {
                 setIsLoading(false);
             }
         }
-        if (costumeNumber) {
+        if (Number.isFinite(costumeNumber)) {
             fetchData();
+        } else {
+            setIsLoading(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [costumeNumber]);

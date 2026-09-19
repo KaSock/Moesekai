@@ -535,8 +535,10 @@ export default function VirtualLiveDetailClient() {
                 setIsLoading(false);
             }
         }
-        if (virtualLiveId) {
+        if (Number.isFinite(virtualLiveId)) {
             fetchData();
+        } else {
+            setIsLoading(false);
         }
     }, [virtualLiveId]);
 

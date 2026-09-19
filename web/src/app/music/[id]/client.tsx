@@ -232,7 +232,7 @@ export default function MusicDetailPage() {
                 setIsLoading(false);
             }
         }
-        if (musicId) {
+        if (Number.isFinite(musicId)) {
             fetchData();
 
             // Fetch optional meta and rankings data (don't block main content)
@@ -323,6 +323,8 @@ export default function MusicDetailPage() {
             }).catch(err => {
                 console.warn("Failed to load song constants:", err);
             });
+        } else {
+            setIsLoading(false);
         }
     }, [musicId]);
 

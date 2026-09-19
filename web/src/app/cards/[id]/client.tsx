@@ -208,8 +208,10 @@ export default function CardDetailPage({ id }: { initialData?: unknown; id?: num
                 setIsLoading(false);
             }
         }
-        if (cardId) {
+        if (Number.isFinite(cardId)) {
             fetchCard();
+        } else {
+            setIsLoading(false);
         }
     }, [cardId, t]);
 

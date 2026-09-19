@@ -177,8 +177,10 @@ export default function EventDetailPage() {
                 setIsLoading(false);
             }
         }
-        if (eventId) {
+        if (Number.isFinite(eventId)) {
             fetchData();
+        } else {
+            setIsLoading(false);
         }
     }, [eventId]);
 
