@@ -217,7 +217,7 @@ function RealtimeRankingNextContent() {
                                     boardMode === "overall"
                                         ? "bg-miku text-white shadow-md shadow-miku/20"
                                         : "border border-slate-200 bg-white text-slate-600 hover:border-miku/40 hover:text-miku dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                                }}`}
+                                }`}
                             >
                                 {t("page.realtimeRankingNext.board.overall")}
                             </button>
@@ -227,7 +227,7 @@ function RealtimeRankingNextContent() {
                                     boardMode === "worldlink"
                                         ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
                                         : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-                                }}`}
+                                }`}
                             >
                                 {t("page.realtimeRankingNext.board.worldlink")}
                             </button>
