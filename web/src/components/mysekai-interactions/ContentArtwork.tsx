@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import SdPortrait from "./SdPortrait";
 import type { MolyEntry, MolyFixture } from "@/lib/moly/contract";
 import { resourceImage, type ResourceSnapshot } from "@/lib/moly/catalog";
-import { packedImage } from "@/lib/moly/packedImages";
 
 export function FixtureArtwork({
     fixture,
@@ -16,31 +15,7 @@ export function FixtureArtwork({
     snapshot: ResourceSnapshot;
     size?: number;
 }) {
-    const [packed, setPacked] = useState<{ key: string; url: string } | null>(null);
-    const key = `${snapshot.id}:${fixture.image}`;
-
-    useEffect(() => {
-        if (!snapshot.packs || !fixture.image) return;
-        let cancelled = false;
-        let url: string | null = null;
-        void packedImage(snapshot, fixture.image)
-            .then(blob => {
-                if (cancelled) return;
-                url = URL.createObjectURL(blob);
-                setPacked({ key, url });
-            })
-            .catch(() => {});
-        return () => {
-            cancelled = true;
-            if (url) URL.revokeObjectURL(url);
-        };
-    }, [snapshot, fixture.image, key]);
-
-    const src = snapshot.packs
-        ? packed?.key === key
-            ? packed.url
-            : undefined
-        : resourceImage(snapshot, fixture.image);
+    const src = resourceImage(snapshot, fixture.image);
     const [failed, setFailed] = useState<string | null>(null);
 
     return (

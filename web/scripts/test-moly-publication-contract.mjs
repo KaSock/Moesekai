@@ -19,7 +19,7 @@ const catalogURL = await moduleURL("../src/lib/moly/catalog.ts", {
     "./resourceBase": resourceBase,
     "./workspaceNavigation": navigation,
 });
-const { fetchRuntimeManifest, fetchContentCatalog, fetchContentDetail } = await import(catalogURL);
+const { fetchRuntimeManifest, fetchContentCatalog, fetchContentDetail, resourceImage } = await import(catalogURL);
 const coordinateContract = "moly-rh-y-up-reflect-x-v1";
 const source = region => ({
     id: `${region}-6.0.0-example`, region, version: "6.0.0",
@@ -115,6 +115,27 @@ try {
     await assert.rejects(serve({ ...content, snapshotId: "jp-previous" }, () => fetchContentCatalog(snapshot)), /moly_catalog_mismatch/);
     const entry = { key: "talk:general:1", detail: "entries/talk-general-1.json" };
     await assert.rejects(serve({ schemaVersion: 1, snapshotId: "jp-previous", entry }, () => fetchContentDetail(snapshot, entry)), /moly_detail_mismatch/);
+
+    // Schema 2: details live in content-addressed bundles shared across snapshots.
+    const { createHash } = await import("node:crypto");
+    const bundleBody = { schemaVersion: 2, entries: { "talk:general:1": { key: "talk:general:1", title: "bundled" } } };
+    const bundlePath = `/moly/catalog-store/${createHash("sha256").update(JSON.stringify(bundleBody)).digest("hex")}.json`;
+    const card = detail => ({ key: "talk:general:1", fixtureIds: [], unitIds: [], available: true, presentation: {}, detail });
+    const bundled = await serve({ ...content, schemaVersion: 2, details: [bundlePath], entries: [card(0)] }, () => fetchContentCatalog(snapshot));
+    assert.equal(bundled.entries[0].detail, bundlePath);
+    assert.equal((await serve(bundleBody, () => fetchContentDetail(snapshot, bundled.entries[0]))).title, "bundled");
+    assert.equal(requests[0].url, (process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE ?? "/moly/") + bundlePath.slice("/moly/".length));
+    assert.equal(requests[0].options.cache, "force-cache");
+    await assert.rejects(serve({ ...bundleBody, schemaVersion: 3 }, () => fetchContentDetail(snapshot, bundled.entries[0])), /moly_detail_mismatch/);
+    await assert.rejects(serve({ ...content, schemaVersion: 2, details: [bundlePath], entries: [card(1)] }, () => fetchContentCatalog(snapshot)), /moly_catalog_invalid/);
+    await assert.rejects(serve({ ...content, schemaVersion: 2, details: ["/moly/catalog-store/x.json"], entries: [] }, () => fetchContentCatalog(snapshot)), /moly_catalog_mismatch/);
+
+    // Packed cards name images by content address; logical paths have no URL there.
+    const blobImage = `/moly/asset-store/blobs/ab/ab${"0".repeat(62)}.bin`;
+    assert.equal(resourceImage(packedParsed.snapshots[0], blobImage), "https://resources.example.test/bucket/" + blobImage.slice("/moly/".length));
+    assert.equal(resourceImage(packedParsed.snapshots[0], "fixture-thumbnails/textures/a.png"), undefined);
+    assert.equal(resourceImage(packedParsed.snapshots[0], `/moly/asset-store/blobs/cd/ab${"0".repeat(62)}.bin`), undefined);
+    assert.equal(resourceImage(parsed.snapshots[1], "fixture-thumbnails/textures/a.png"), "https://resources.example.test/bucket/snapshots/jp-6.0.0-example/assets/fixture-thumbnails/textures/a.png");
 
     const stage = await readFile(new URL("../src/components/mysekai-interactions/RuntimeStage.tsx", import.meta.url), "utf8");
     assert.ok(stage.includes("region: request.snapshot.region, version: request.snapshot.version, snapshot: request.snapshot.id"));

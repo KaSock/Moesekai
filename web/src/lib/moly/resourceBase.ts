@@ -31,7 +31,7 @@ export function molyResourceBase(): string {
  * only the host decides where the bytes are served from.
  */
 export function molyResourceUrl(path: string): string {
-    if (!/^\/moly\/(?:snapshots|releases|asset-store)\//.test(path) || /[\%?#]/.test(path)
+    if (!/^\/moly\/(?:snapshots|releases|asset-store|catalog-store)\//.test(path) || /[\%?#]/.test(path)
         || path.split("/").some(part => part === "." || part === "..")) throw new Error("moly_resource_path_invalid");
     const base = molyResourceBase();
     return base ? base + path.slice("/moly/".length) : path;
