@@ -155,7 +155,7 @@ export function PredictionWlChapterBar({ state }: PredictionEventPickerProps) {
                                     name: getCharacterName(t, wb.gameCharacterId)
                                 })}
                             </span>
-                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                            <span className={`text-[10px] px-1.5 rounded font-medium ${
                                 isSelected
                                     ? "bg-white/20 text-white"
                                     : isOngoing
