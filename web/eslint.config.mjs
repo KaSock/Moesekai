@@ -28,6 +28,7 @@ const eslintConfig = defineConfig([
     "public/sw.js",
     "public/wasm/**",
     "src/vendor/**",
+    "vendor/**",
   ]),
 ]);
 

@@ -11,12 +11,14 @@
  *   ALLIUM_DECK_WASM_DIR=... 可指定本地 wasm 产物目录，默认 public/wasm。
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 
 const webRoot = resolve(import.meta.dirname ?? '.', '..');
 const artDir = resolve(process.env.ALLIUM_DECK_WASM_DIR || `${webRoot}/public/wasm`);
+// public/wasm 下是改名后的 allium-deck.*；wasm-pack 产物、npm 包与 vendor 目录是原名 allium_deck.*。
+const artBase = existsSync(`${artDir}/allium-deck.js`) ? 'allium-deck' : 'allium_deck';
 const MASTER_BASE = 'https://metadata.exmeaning.com/jp/master';
 const MUSIC_META_URL = 'https://moe.exmeaning.com/data/music_meta/music_metas.json';
 const SUITE = 'https://suite-api.haruki.seiunx.com/public';
@@ -29,7 +31,8 @@ const PRELOAD_MASTER_KEYS = [
     'gameCharacterUnits', 'honors', 'masterLessons', 'mysekaiGates',
     'mysekaiGateLevels', 'skills', 'worldBloomDifferentAttributeBonuses',
     'worldBloomSupportDeckBonuses', 'worldBloomSupportDeckUnitEventLimitedBonuses',
-    'eventCardBonusLimits', 'eventHonorBonuses', 'eventSkillScoreUpLimits',
+    'eventCardBonusLimits', 'eventHonorBonuses', 'eventSkillScoreUpLimits', 'eventShuffleUnitBonuses',
+    'eventMysekaiFixtureGameCharacterPerformanceBonusLimits',
 ];
 const LOCAL_MASTER_KEYS = ['worldBloomSupportDeckBonusesWL1', 'worldBloomSupportDeckBonusesWL2', 'worldBloomSupportDeckBonusesWL3'];
 const USER_KEYS = ['userCards','userBonds','userDecks','userGamedata','userMusics','userMusicResults',
@@ -305,8 +308,8 @@ async function fetchJson(url, attempts = 3) {
 
 async function main() {
     console.log('1) 加载 wasm 与数据…');
-    const mod = await import(pathToFileURL(`${artDir}/allium-deck.js`).href);
-    await mod.default(new Uint8Array(readFileSync(`${artDir}/allium-deck_bg.wasm`)));
+    const mod = await import(pathToFileURL(`${artDir}/${artBase}.js`).href);
+    await mod.default(new Uint8Array(readFileSync(`${artDir}/${artBase}_bg.wasm`)));
     const master = {};
     for (const key of PRELOAD_MASTER_KEYS) {
         try {

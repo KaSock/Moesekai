@@ -13,7 +13,7 @@
  *   ALLIUM_DECK_WASM_DIR=... 可指定本地 wasm 产物目录，默认用 public/wasm。
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 
@@ -22,9 +22,9 @@ const MUSIC_META_URL = 'https://moe.exmeaning.com/data/music_meta/music_metas.js
 
 /** 与 src/lib/deck-recommend/data-provider.ts 的 PRELOAD_MASTER_KEYS 保持一致。 */
 const PRELOAD_MASTER_KEYS = [
-    'areaItemLevels', 'cards', 'cardMysekaiCanvasBonuses', 'cardRarities',
+    'areaItems', 'areaItemLevels', 'cards', 'cardMysekaiCanvasBonuses', 'cardRarities',
     'characterRanks', 'cardEpisodes', 'events', 'eventCards',
-    'eventRarityBonusRates', 'eventDeckBonuses', 'gameCharacters',
+    'eventRarityBonusRates', 'eventDeckBonuses', 'gameCharacters', 'worldBlooms',
     'gameCharacterUnits', 'honors', 'masterLessons', 'mysekaiGates',
     'mysekaiGateLevels', 'skills', 'worldBloomDifferentAttributeBonuses',
     'worldBloomSupportDeckBonuses', 'worldBloomSupportDeckBonusesWL1',
@@ -37,6 +37,8 @@ const ENGINE_OPTIONAL_MASTER_KEYS = [
     'eventCardBonusLimits',
     'eventHonorBonuses',
     'eventSkillScoreUpLimits',
+    'eventShuffleUnitBonuses',
+    'eventMysekaiFixtureGameCharacterPerformanceBonusLimits',
 ];
 
 const webRoot = resolve(import.meta.dirname ?? '.', '..');
@@ -140,15 +142,26 @@ function buildSyntheticUserData(master) {
     };
 }
 
-async function main() {
-const artDir = resolve(process.env.ALLIUM_DECK_WASM_DIR || `${webRoot}/public/wasm`);
-    const glueUrl = pathToFileURL(`${artDir}/allium-deck.js`).href;
+/** public/wasm 下是 copy-wasm 改名后的 allium-deck.*；wasm-pack 产物、npm 包与
+ *  vendor 目录是原名 allium_deck.*，ALLIUM_DECK_WASM_DIR 两种都认。 */
+function resolveArtifacts(dir) {
+    for (const [glue, wasm] of [
+        ['allium-deck.js', 'allium-deck_bg.wasm'],
+        ['allium_deck.js', 'allium_deck_bg.wasm'],
+    ]) {
+        if (existsSync(`${dir}/${glue}`)) return { glue: `${dir}/${glue}`, wasm: `${dir}/${wasm}` };
+    }
+    throw new Error(`${dir} 里没有 allium-deck.js / allium_deck.js`);
+}
 
-    console.log('1) 加载 wasm 模块…');
+async function main() {
+    const artifacts = resolveArtifacts(resolve(process.env.ALLIUM_DECK_WASM_DIR || `${webRoot}/public/wasm`));
+
+    console.log(`1) 加载 wasm 模块（${artifacts.glue}）…`);
     // 与 lib/deck-engine/wasm-loader.ts 相同的动态 import 方式；Node 下
     // fetch 不支持 file://，直接把 wasm 字节喂给 init。
-    const mod = await import(glueUrl);
-    await mod.default(new Uint8Array(readFileSync(`${artDir}/allium-deck_bg.wasm`)));
+    const mod = await import(pathToFileURL(artifacts.glue).href);
+    await mod.default(new Uint8Array(readFileSync(artifacts.wasm)));
     console.log('   ok');
 
     console.log('2) 拉取 master data…');
@@ -183,7 +196,8 @@ const artDir = resolve(process.env.ALLIUM_DECK_WASM_DIR || `${webRoot}/public/wa
     );
     if (power.decks.length === 0) throw new Error('没有返回任何卡组');
 
-    const latestEvent = [...master.events].sort((a, b) => a.startAt - b.startAt).at(-1);
+    const events = [...master.events].sort((a, b) => a.startAt - b.startAt);
+    const latestEvent = events.at(-1);
     console.log(`6) recommend(event_id=${latestEvent.id}, target=score)…`);
     const score = run({ event_id: latestEvent.id, target: 'score' });
     console.log(
@@ -192,13 +206,19 @@ const artDir = resolve(process.env.ALLIUM_DECK_WASM_DIR || `${webRoot}/public/wa
     );
     if (score.decks.length === 0) throw new Error('活动 PT 路径没有返回卡组');
 
-    // 控分组卡：target=bonus + target_bonus_list（精确加成档位）。
-    const topBonus = Math.round(score.decks[0]?.event_bonus_total ?? 0);
+    // 控分组卡：target=bonus + target_bonus_list（精确加成档位）。引擎的终章路径不支持
+    // bonus target（与 #180 相同，直接报错），最新活动是终章时改用最近的非终章活动。
+    const finaleIds = new Set(
+        master.worldBlooms.filter((row) => row.worldBloomChapterType === 'finale').map((row) => row.eventId),
+    );
+    const bonusEvent = events.filter((event) => !finaleIds.has(event.id)).at(-1);
+    const bonusBase = bonusEvent.id === latestEvent.id ? score : run({ event_id: bonusEvent.id, target: 'score' });
+    const topBonus = Math.round(bonusBase.decks[0]?.event_bonus_total ?? 0);
     const lo = Math.max(0, topBonus - 26);
     const hi = Math.min(topBonus + 5, lo + 31); // 引擎单次最多 32 档
-    console.log(`7) recommend(target=bonus, target_bonus_list=[${lo}..${hi}])…`);
+    console.log(`7) recommend(event_id=${bonusEvent.id}, target=bonus, target_bonus_list=[${lo}..${hi}])…`);
     const bonus = run({
-        event_id: latestEvent.id,
+        event_id: bonusEvent.id,
         target: 'bonus',
         target_bonus_list: Array.from({ length: hi - lo + 1 }, (_, i) => lo + i),
         limit: 1,

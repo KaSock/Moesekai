@@ -75,6 +75,8 @@ export const ENGINE_OPTIONAL_MASTER_KEYS = [
     "eventCardBonusLimits",
     "eventHonorBonuses",
     "eventSkillScoreUpLimits",
+    "eventShuffleUnitBonuses",
+    "eventMysekaiFixtureGameCharacterPerformanceBonusLimits",
 ];
 
 /**
