@@ -1,16 +1,17 @@
-// 回测数据集：读取提交的活动表 / 终榜与 sessions 下的逐时序列，并提供按 (区服, 活动, 范围) 的索引工具。
+// 回测数据集：读取提交的活动表 / 终榜与工作目录（workdir.mjs）下的逐时序列，并提供按 (区服, 活动, 范围) 的索引工具。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { scopeGroup, scopeWindow } from "../../src/lib/prediction/model/dataset-context.ts";
+import { WORK_ROOT } from "./workdir.mjs";
 
 export { scopeGroup, scopeWindow };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-export const SESSIONS_MODEL_DIR = "/Volumes/Amia/Akiyama_mizuki/Coding/sessions/prediction-model";
-export const DEFAULT_DATA_DIR = path.join(SESSIONS_MODEL_DIR, "data");
+export const MODEL_WORK_DIR = path.join(WORK_ROOT, "prediction-model");
+export const DEFAULT_DATA_DIR = path.join(MODEL_WORK_DIR, "data");
 export const COMMITTED_DATA_DIR = path.join(HERE, "data");
 
 // 序列末点距结算不超过该值时，可在缺少终榜记录时当作终榜。

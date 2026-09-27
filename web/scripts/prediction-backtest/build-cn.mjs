@@ -24,11 +24,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
+import { WORK_ROOT } from "./workdir.mjs";
+
 /** @typedef {import("../../src/lib/prediction/model/types.ts").DatasetFinal} DatasetFinal */
 /** @typedef {import("../../src/lib/prediction/model/types.ts").DatasetSeries} DatasetSeries */
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const SESSIONS = "/Volumes/Amia/Akiyama_mizuki/Coding/sessions";
 const UA = "Moesekai-prediction-model/1.0 (+https://pjsk.moe)";
 const RK = "https://rk.exmeaning.com/public";
 const HOUR = 3600e3;
@@ -55,7 +56,7 @@ export function parseArgs(argv) {
         if (a === "--offline") opts.offline = true;
         else if (a.startsWith("--")) opts[a.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = argv[++i];
     }
-    const data = path.resolve(opts.data ?? path.join(SESSIONS, "prediction-model/data"));
+    const data = path.resolve(opts.data ?? path.join(WORK_ROOT, "prediction-model/data"));
     const committed = path.resolve(SCRIPT_DIR, "data");
     return {
         offline: opts.offline,
@@ -64,11 +65,11 @@ export function parseArgs(argv) {
         out: path.resolve(opts.out ?? path.join(committed, "cn")),
         raw: path.resolve(opts.raw ?? path.join(data, "../raw/cn")),
         live: path.resolve(opts.live ?? path.join(data, "../live/data")),
-        charts: path.resolve(opts.charts ?? path.join(SESSIONS, "jp-border-data/metrics/charts")),
-        masterdata: path.resolve(opts.masterdata ?? path.join(SESSIONS, "wlrules")),
+        charts: path.resolve(opts.charts ?? path.join(WORK_ROOT, "jp-border-data/metrics/charts")),
+        masterdata: path.resolve(opts.masterdata ?? path.join(WORK_ROOT, "wlrules")),
         events: path.resolve(opts.events ?? path.join(committed, "events.json")),
         jpFinals: path.resolve(opts.jpFinals ?? path.join(committed, "finals-jp.json")),
-        jpBorders: path.resolve(opts.jpBorders ?? path.join(SESSIONS, "jp-border-data/jp_event_borders_all.json")),
+        jpBorders: path.resolve(opts.jpBorders ?? path.join(WORK_ROOT, "jp-border-data/jp_event_borders_all.json")),
         ratiosOut: opts.ratiosOut ? path.resolve(opts.ratiosOut) : null,
     };
 }

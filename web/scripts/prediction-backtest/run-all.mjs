@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { BASELINES } from "./baselines/index.mjs";
-import { DEFAULT_DATA_DIR, SESSIONS_MODEL_DIR, loadDataset } from "./dataset.mjs";
+import { DEFAULT_DATA_DIR, MODEL_WORK_DIR, loadDataset } from "./dataset.mjs";
 import { rollingBacktest } from "./harness.mjs";
 import { DEFAULT_GROUP_BY, aggregate } from "./metrics.mjs";
 import { DEFAULT_BACKTEST_DIR, DEFAULT_REPORT_PATH, NEW_MODEL, renderReport } from "./report.mjs";
@@ -30,7 +30,7 @@ export const PREDICT_MODULE = path.resolve(HERE, "../../src/lib/prediction/model
 /** 上线模型；与 fit-fuse.mjs 的 DEFAULT_PRIORS_PATH 相同。 */
 export const SHIPPED_PRIORS_PATH = path.resolve(HERE, "../../src/lib/prediction/priors.json");
 /** 四个拟合脚本共同的默认 --out。 */
-export const DEFAULT_FIT_DIR = path.join(SESSIONS_MODEL_DIR, "fit");
+export const DEFAULT_FIT_DIR = path.join(MODEL_WORK_DIR, "fit");
 
 export const GROUPS = ["normal", "wl_chapter_72h", "wl_chapter_48h", "wl_overall", "wl_finale"];
 

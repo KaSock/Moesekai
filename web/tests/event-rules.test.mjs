@@ -1,7 +1,7 @@
 /**
  * resolveEventRules：逐期规则档案（contract §1 / §1a）。
  * Run with: node --test --experimental-strip-types tests/event-rules.test.mjs
- * 夹具为 sessions/wlrules 的真实 masterdata 行（按所需活动裁剪）；worldBloomChapterRankingRewardRanges
+ * 夹具为回测工作目录 wlrules/ 下的真实 masterdata 行（按所需活动裁剪）；worldBloomChapterRankingRewardRanges
  * （仅 JP #214 / CN #112）与 eventTotalPowerLimits（JP 全部 6 行，CN 为空表）取自 metadata.exmeaning.com。
  */
 import test from "node:test";

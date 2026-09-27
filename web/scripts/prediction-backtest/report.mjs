@@ -5,12 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SESSIONS_MODEL_DIR } from "./dataset.mjs";
+import { MODEL_WORK_DIR } from "./dataset.mjs";
 import { TIER_BANDS, aggregate, pairRows, summarize } from "./metrics.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-export const DEFAULT_BACKTEST_DIR = path.join(SESSIONS_MODEL_DIR, "backtest");
+export const DEFAULT_BACKTEST_DIR = path.join(MODEL_WORK_DIR, "backtest");
 export const DEFAULT_REPORT_PATH = path.join(HERE, "report.md");
 
 export const NEW_MODEL = "model";

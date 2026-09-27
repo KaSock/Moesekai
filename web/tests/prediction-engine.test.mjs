@@ -73,7 +73,7 @@ const FIXTURES = new URL("./fixtures/event-rules/", import.meta.url);
 const DATA = new URL("../scripts/prediction-backtest/data/", import.meta.url);
 const readJson = (url) => JSON.parse(readFileSync(url, "utf8"));
 
-// 日服 #216 After the Fire（普通活动，疲劳槽第 2 套）：sessions/wlrules/jp_events.json 原行（奖励区间只留榜线）。
+// 日服 #216 After the Fire（普通活动，疲劳槽第 2 套）：回测工作目录 wlrules/jp_events.json 原行（奖励区间只留榜线）。
 const JP_216 = {
   id: 216, eventType: "marathon", name: "After the Fire", assetbundleName: "event_afterfire_2026",
   startAt: 1788674400000, aggregateAt: 1789214399000, closedAt: 1789365599000, unit: "street",

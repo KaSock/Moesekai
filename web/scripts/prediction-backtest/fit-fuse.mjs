@@ -26,7 +26,7 @@ import { componentEstimates, fuseComponents } from "../../src/lib/prediction/mod
 import { currentEngineBaseline } from "./baselines/current-engine.mjs";
 import {
     DEFAULT_DATA_DIR,
-    SESSIONS_MODEL_DIR,
+    MODEL_WORK_DIR,
     actualFinals,
     cellOf,
     eventKey,
@@ -48,7 +48,7 @@ const HOUR_MS = 3_600_000;
 const YEAR_MS = 365.25 * 24 * HOUR_MS;
 const MIN_LOG_SIGMA = 1e-4;
 
-export const DEFAULT_FIT_DIR = path.join(SESSIONS_MODEL_DIR, "fit");
+export const DEFAULT_FIT_DIR = path.join(MODEL_WORK_DIR, "fit");
 export const DEFAULT_PRIORS_PATH = path.resolve(HERE, "../../src/lib/prediction/priors.json");
 // 防止意外膨胀（例如给每期普通活动单列单元格）的上限，不是预算：priors.json 只进预测页与规划器按需加载的模型 chunk
 // （299 KB 时 gzip 约 70 KB），每新增一期终章约多 8 KB。
@@ -738,10 +738,10 @@ export function renderEvaluate(results) {
 }
 
 /** report.md 的融合层一节：总表与按截点表（完整的按单元格表在 fuse-evaluate.md）。 */
-export function renderAblationSection(results, { evaluatePath }) {
+export function renderAblationSection(results) {
     const lines = ["## 附：融合层消融（fit-fuse.mjs --evaluate）", ""];
     lines.push("同一批内层滚动组件记录上，只改融合层设置的滚动模拟；第一行是上线默认。“终榜超出物理上限”是终榜高于该点物理上限的配对点数。"
-        + `按单元格的完整表见 \`${evaluatePath}\`。`, "");
+        + "按单元格的完整表见拟合输出目录（--out，默认为工作目录下的 `prediction-model/fit`）里的 `fuse-evaluate.md`。", "");
     lines.push(`${SELECTION_TEXT}各方案对点预测的影响见 MAPE 列，对区间的影响见覆盖率列；样本外的覆盖率要等之后新结算的活动来检验。`, "");
     lines.push(...overallTable(results), "", "按截点的 MAPE：", "", ...byCutTable(results.filter((r) => /默认|只用|tori-v2/.test(r.name))), "");
     return lines.join("\n");
@@ -949,7 +949,7 @@ async function main() {
         const untested = cellsWithoutEvidence(data, table, fuse);
         const borrowed = pendingBorrowedLevels(borrowedLevels(priors.prior, data, -Infinity), data);
         const parts = [md.trimEnd(), renderFallbackSection(table, { priorsPath: args.priors, untested, borrowed })];
-        if (results) parts.push(renderAblationSection(results, { evaluatePath: path.join(args.out, "fuse-evaluate.md") }));
+        if (results) parts.push(renderAblationSection(results));
         fs.writeFileSync(args.annotateReport, `${parts.join("\n\n").trimEnd()}\n`);
         console.log(`已在 ${args.annotateReport} 末尾写入回退${results ? "与消融" : ""}一节`);
     }

@@ -1,6 +1,6 @@
 /**
  * 融合与区间（src/lib/prediction/model/fuse.ts、predict.ts）与拟合脚本（scripts/prediction-backtest/fit-fuse.mjs）的单元测试。
- * 合成记录按已知误差尺度生成；最后一组在本机有 sessions 数据时用真实数据检查“模拟 = 回测同一路径”与无未来泄漏。
+ * 合成记录按已知误差尺度生成；最后一组在回测工作目录（PREDICTION_WORKDIR）有真实数据时检查“模拟 = 回测同一路径”与无未来泄漏。
  * 运行：node --test --experimental-strip-types tests/prediction-fuse.test.mjs
  */
 import test from "node:test";

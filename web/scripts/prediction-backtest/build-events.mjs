@@ -4,7 +4,7 @@
  * 输出（提交到仓库）：
  *   data/events.json     DatasetEvent[]，两服 masterdata 里的全部活动；group / wlTurn / isFinale / autoSpecialMeasure 取自 resolveEventRules（overall 范围）。
  *   data/finals-jp.json  DatasetFinal[]，日服终榜。来源优先级：D1 的 sekai.best 序列（仅取结算后的快照）> 本机终榜表 > 本机逐日表。
- *   wlrules 快照缺的表（eventStories、国服 gameCharacterUnits）首次运行从 metadata 站取一次，缓存在 prediction-model/raw/masterdata。
+ *   wlrules 快照缺的表（eventStories、国服 gameCharacterUnits）首次运行从 metadata 站取一次，缓存在工作目录的 prediction-model/raw/masterdata（见 workdir.mjs）。
  *
  * 本机终榜表的 id 不是游戏活动 id，按「活动名 + 开始日期（JST）」对齐 masterdata；对不上的行在报告里逐条列出。
  * 章节的 group（wl_chapter_72h / wl_chapter_48h）按章节时长由调用方或 resolveEventRules 的 chapter 范围得出，这里的 group 是整期（overall）的。
@@ -19,15 +19,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { resolveEventRules, EVENT_RULE_TABLES } from '../../src/lib/event-rules/index.ts';
 import { applyMasterdataPatches } from '../../src/lib/masterdata-patches.ts';
+import { WORK_ROOT } from './workdir.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SESSIONS = '/Volumes/Amia/Akiyama_mizuki/Coding/sessions';
 
 export const DEFAULTS = {
-    wlrules: `${SESSIONS}/wlrules`,
-    borders: `${SESSIONS}/jp-border-data`,
-    data: `${SESSIONS}/prediction-model/data`,
-    masterdataCache: `${SESSIONS}/prediction-model/raw/masterdata`,
+    wlrules: path.join(WORK_ROOT, 'wlrules'),
+    borders: path.join(WORK_ROOT, 'jp-border-data'),
+    data: path.join(WORK_ROOT, 'prediction-model/data'),
+    masterdataCache: path.join(WORK_ROOT, 'prediction-model/raw/masterdata'),
     out: path.join(HERE, 'data'),
 };
 

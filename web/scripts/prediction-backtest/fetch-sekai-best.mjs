@@ -28,12 +28,13 @@ import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-const SESSIONS = "/Volumes/Amia/Akiyama_mizuki/Coding/sessions";
+import { WORK_ROOT } from "./workdir.mjs";
+
 export const DEFAULTS = {
-    raw: `${SESSIONS}/prediction-model/raw/sekai-best`,
-    data: `${SESSIONS}/prediction-model/data`,
-    master: `${SESSIONS}/wlrules`,
-    borders: `${SESSIONS}/jp-border-data`,
+    raw: path.join(WORK_ROOT, "prediction-model/raw/sekai-best"),
+    data: path.join(WORK_ROOT, "prediction-model/data"),
+    master: path.join(WORK_ROOT, "wlrules"),
+    borders: path.join(WORK_ROOT, "jp-border-data"),
 };
 const API = "https://api.sekai.best";
 const USER_AGENT = "Moesekai-prediction-model/1.0 (+https://pjsk.moe)";

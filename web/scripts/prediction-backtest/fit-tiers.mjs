@@ -23,7 +23,7 @@ import {
 } from "../../src/lib/prediction/model/tiers.ts";
 import {
     DEFAULT_DATA_DIR,
-    SESSIONS_MODEL_DIR,
+    MODEL_WORK_DIR,
     actualFinals,
     cellOf,
     indexDataset,
@@ -40,8 +40,8 @@ import { aggregate, pairRows, summarize, tierBand } from "./metrics.mjs";
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-export const DEFAULT_FIT_OUT = path.join(SESSIONS_MODEL_DIR, "fit");
-export const DEFAULT_TIERS_BACKTEST_DIR = path.join(SESSIONS_MODEL_DIR, "backtest", "tiers");
+export const DEFAULT_FIT_OUT = path.join(MODEL_WORK_DIR, "fit");
+export const DEFAULT_TIERS_BACKTEST_DIR = path.join(MODEL_WORK_DIR, "backtest", "tiers");
 
 export const DEFAULT_TIERS_OPTIONS = Object.freeze({
     // 收缩强度 K：0 = 只用单元格自身数据（不跨单元格共享，也不给无数据的单元格合并值）。

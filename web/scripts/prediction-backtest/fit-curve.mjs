@@ -30,12 +30,12 @@ import {
     shareAt,
 } from "../../src/lib/prediction/model/curve.ts";
 import { contextFromDataset, scopeWindow } from "../../src/lib/prediction/model/dataset-context.ts";
-import { DEFAULT_DATA_DIR, SESSIONS_MODEL_DIR, actualFinals, indexDataset, loadDataset, scopeKey, scopesOf } from "./dataset.mjs";
+import { DEFAULT_DATA_DIR, MODEL_WORK_DIR, actualFinals, indexDataset, loadDataset, scopeKey, scopesOf } from "./dataset.mjs";
 
 const HOUR_MS = 3_600_000;
 const YEAR_MS = 365.25 * 24 * HOUR_MS;
 
-export const DEFAULT_FIT_DIR = path.join(SESSIONS_MODEL_DIR, "fit");
+export const DEFAULT_FIT_DIR = path.join(MODEL_WORK_DIR, "fit");
 
 export const CURVE_FIT_DEFAULTS = Object.freeze({
     anchors: [1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000,

@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { contextFromDataset, scopeWindow } from "../../src/lib/prediction/model/dataset-context.ts";
 import { MIXED_UNIT, YEAR_MS, finalPrior, priorCellKey, ratioCellKeys } from "../../src/lib/prediction/model/prior.ts";
-import { DEFAULT_DATA_DIR, SESSIONS_MODEL_DIR, actualFinals, eventKey, indexDataset, loadDataset, scopeKey, scopesOf } from "./dataset.mjs";
+import { DEFAULT_DATA_DIR, MODEL_WORK_DIR, actualFinals, eventKey, indexDataset, loadDataset, scopeKey, scopesOf } from "./dataset.mjs";
 import { rollingBacktest } from "./harness.mjs";
 import { summarize } from "./metrics.mjs";
 
@@ -18,7 +18,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HOUR_MS = 3_600_000;
 const Z90 = 1.2815515655446004;
 
-export const DEFAULT_FIT_DIR = path.join(SESSIONS_MODEL_DIR, "fit");
+export const DEFAULT_FIT_DIR = path.join(MODEL_WORK_DIR, "fit");
 export const PRIOR_EPOCH_MS = Date.UTC(2020, 8, 30);
 export const HOURS_REF = 192;
 const SIGMA_FLOOR = 0.03;

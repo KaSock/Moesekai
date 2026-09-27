@@ -1,6 +1,6 @@
 /**
  * 进度曲线（src/lib/prediction/model/curve.ts）与拟合脚本（scripts/prediction-backtest/fit-curve.mjs）的单元测试。
- * 合成数据按已知速率生成；最后一组在本机有 sessions 数据时用真实数据做冒烟检查。
+ * 合成数据按已知速率生成；最后一组在回测工作目录（PREDICTION_WORKDIR）有真实数据时做冒烟检查。
  * 运行：node --test --experimental-strip-types tests/prediction-curve.test.mjs
  */
 import test from "node:test";
@@ -380,7 +380,7 @@ test("buildHourGrid: bins follow hours since start, hours to end and local clock
 
 const REAL_DATA = fs.existsSync(path.join(DEFAULT_DATA_DIR, "series", "jp-216.json"));
 
-test("real data: cells keep editions apart and every event's curve is a valid share", { skip: !REAL_DATA && "sessions data not present" }, () => {
+test("real data: cells keep editions apart and every event's curve is a valid share", { skip: !REAL_DATA && "work-directory data not present" }, () => {
     const data = loadDataset(DEFAULT_DATA_DIR, { log: () => {} });
     const section = fitCurve(data);
     const jp214 = data.events.find((e) => e.region === "jp" && e.eventId === 214);
