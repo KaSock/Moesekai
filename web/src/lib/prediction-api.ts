@@ -13,7 +13,6 @@ import {
     TierKLine,
     RankChart,
 } from '@/types/prediction';
-import { calculateEventPrediction } from '@/lib/prediction-engine';
 import {
     dedupeInflight,
     getCachedTimeline,
@@ -28,15 +27,54 @@ import {
 import { fetchLatestV2, fetchTierSeriesV2 } from '@/lib/realtime-ranking-next-api';
 import { fetchMasterDataForServer, fetchMasterData } from '@/lib/fetch';
 import { IEventInfo } from '@/types/events';
+import type { PredictionContextSource } from '@/lib/prediction/live-prediction';
 
 const BASE_URL = 'https://rk.exmeaning.com';
+/** Tiers built from a v2 snapshot when the event's reward tiers are unknown (masterdata unavailable). */
 const TARGET_TIERS = [50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 5000, 10000];
 
-/** World Link events award a far larger bonus ceiling, which drives the prior. */
-function isWorldLink(eventMeta: EventListItem | undefined): boolean {
-    return eventMeta?.event_type === 'world_bloom'
-        || (eventMeta?.name?.includes('WORLD LINK') ?? false)
-        || (eventMeta?.name?.includes('ワールドリンク') ?? false);
+type LivePrediction = typeof import('@/lib/prediction/live-prediction');
+
+let livePredictionPromise: Promise<LivePrediction> | null = null;
+
+/** Engine, priors and context helpers, loaded on first use so event-list-only pages (realtime ranking) skip them. */
+function loadLivePrediction(): Promise<LivePrediction> {
+    if (!livePredictionPromise) {
+        const pending = import('@/lib/prediction/live-prediction');
+        livePredictionPromise = pending;
+        pending.catch(() => {
+            if (livePredictionPromise === pending) livePredictionPromise = null;
+        });
+    }
+    return livePredictionPromise;
+}
+
+function tierScoreList(items: ReadonlyArray<{ rank: number; score: number }>): { rank: number; score: number }[] {
+    return items.map((item) => ({ rank: item.rank, score: item.score }));
+}
+
+/**
+ * A running tier's history ending on the snapshot (the timeline is hourly and may be missing), so every tier of
+ * one snapshot is predicted from the same moment; without timeline points it runs from the scope start.
+ */
+function historyEndingOnSnapshot(
+    points: ReadonlyArray<{ t: string; y: number }>,
+    scopeStartAt: number,
+    updatedAt: number,
+    score: number,
+): { t: string; y: number }[] {
+    const out = [...points];
+    const last = out[out.length - 1];
+    if (!last) {
+        return scopeStartAt > 0 && scopeStartAt < updatedAt
+            ? [{ t: new Date(scopeStartAt).toISOString(), y: 0 }, { t: new Date(updatedAt).toISOString(), y: score }]
+            : [];
+    }
+    const lastMs = new Date(last.t).getTime();
+    const snapshotIso = new Date(updatedAt).toISOString();
+    if (Math.abs(updatedAt - lastMs) < 60_000) out[out.length - 1] = { t: snapshotIso, y: score };
+    else if (updatedAt > lastMs) out.push({ t: snapshotIso, y: score });
+    return out;
 }
 
 export async function fetchEventList(server: ServerType): Promise<EventListItem[]> {
@@ -134,7 +172,12 @@ export async function fetchPredictionLatest(eventId: number, server: ServerType)
 }
 
 async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: number): Promise<PredictionData> {
+    const livePromise = loadLivePrediction();
     const latestSnapshot = await fetchLatestV2(server);
+    // v2 serves only the region's running event; another event's tiers must not be shown under this one.
+    if (latestSnapshot.eventId && latestSnapshot.eventId !== eventId) {
+        throw new Error(`Realtime snapshot is for event ${latestSnapshot.eventId}, not ${eventId}`);
+    }
     const updatedAt = latestSnapshot.updatedAt || Date.now();
     const cachedList = getCachedEventList(server);
     const eventMeta = cachedList?.find(e => e.id === eventId);
@@ -152,13 +195,25 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
         }
     }
 
-    const isWorldLinkEvent = isWorldLink(eventMeta);
-    const eventType = isWorldLinkEvent ? 'world_bloom' : (eventMeta?.event_type || 'marathon');
-    const bonusPercent = isWorldLinkEvent ? 990 : 475;
-
+    const [live, contextSource] = await Promise.all([
+        livePromise,
+        livePromise.then((m) => m.awaitContextSource(server, eventId)),
+    ]);
+    // Rows for the event's reward tiers that the snapshot covers, like the rk path's rows.
+    const rewardTiers = contextSource?.rewardTiersFor({ kind: 'overall' }) ?? [];
+    const tiers = rewardTiers.length > 0 ? [...rewardTiers] : TARGET_TIERS;
     // Tier-series is optional; fetchTierSeriesV2 carries its own 15s timeout.
-    const tierSeriesMap: Record<string, { t: number; s: number }[]> =
-        await fetchTierSeriesV2(server, { tiers: TARGET_TIERS }).catch(() => ({}));
+    const tierSeriesMap = await fetchTierSeriesV2(server, { tiers })
+        .catch((): Record<string, { t: number; s: number }[]> => ({}));
+    const context = live.predictionContextFor(contextSource, { kind: 'overall' }, tierScoreList(latestSnapshot.entries), {
+        region: server,
+        eventId,
+        eventType: eventMeta?.event_type,
+        startAt: eventStartAt,
+        endAt: eventEndAt,
+        chapterCharacterId: null,
+        chapterNo: null,
+    });
 
     const tierScores = extractTierScoresFromEntries(latestSnapshot.entries);
     publishRankingSync({
@@ -169,13 +224,16 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
         source: 'prediction',
     });
 
-    const charts: RankChart[] = TARGET_TIERS.map(rank => {
+    const charts: RankChart[] = tiers.flatMap(rank => {
         const entry = latestSnapshot.entries.find(e => e.rank === rank);
-        const currentScore = entry?.score || 0;
+        const series = tierSeriesMap[String(rank)];
+        const hasSeries = Array.isArray(series) && series.length > 0;
+        // Like the rk path, a tier the snapshot does not cover gets no row (JP v2 serves only T1-T100 in a finale).
+        if (!entry && !hasSeries) return [];
+        const currentScore = entry?.score ?? series[series.length - 1].s;
 
         let historyPoints: { t: string; y: number }[] = [];
-        const series = tierSeriesMap[String(rank)];
-        if (Array.isArray(series) && series.length > 0) {
+        if (hasSeries) {
             historyPoints = series.map(pt => ({
                 t: new Date(pt.t).toISOString(),
                 y: pt.s,
@@ -190,25 +248,25 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
             if (new Date(historyPoints[0].t).getTime() > eventStartAt + 3600000) {
                 historyPoints.unshift({ t: startIso, y: 0 });
             }
+            // Per-tier series end at different times; every tier of the snapshot must end at updatedAt.
             const lastPt = historyPoints[historyPoints.length - 1];
             if (Math.abs(new Date(lastPt.t).getTime() - updatedAt) < 60000) {
-                lastPt.y = currentScore;
+                historyPoints[historyPoints.length - 1] = { t: nowIso, y: currentScore };
             } else {
                 historyPoints.push({ t: nowIso, y: currentScore });
             }
         }
 
-        const engineResult = calculateEventPrediction({
+        const engineResult = live.calculateEventPrediction({
             server,
             rank,
             startAt: eventStartAt,
             endAt: eventEndAt,
             historyPoints,
-            eventType,
-            bonusPercent,
+            context,
         });
 
-        return {
+        return [{
             Rank: rank,
             CurrentScore: currentScore,
             PredictedScore: engineResult.predictedScore,
@@ -216,16 +274,15 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
             PredictedScoreP90: engineResult.predictedScoreP90,
             HistoryPoints: historyPoints,
             PredictPoints: engineResult.predictPoints,
-        };
+        }];
     });
 
     const elapsedHours = Math.max(0.1, (updatedAt - eventStartAt) / 3600000);
-    const tier_klines: TierKLine[] = TARGET_TIERS.map(rank => {
-        const chart = charts.find(c => c.Rank === rank);
-        const score = chart?.CurrentScore || 0;
+    const tier_klines: TierKLine[] = charts.map(chart => {
+        const score = chart.CurrentScore;
         const speed = elapsedHours > 0 ? Math.round(score / elapsedHours) : 0;
         return {
-            Rank: rank,
+            Rank: chart.Rank,
             Data: [],
             CurrentIndex: score,
             Speed: speed,
@@ -251,6 +308,13 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
     const base = `${BASE_URL}/public/event/${eventId}`;
 
     return dedupeInflight(`predictionData:${server}:${eventId}`, async () => {
+        // Engine and context load in parallel with the ranking requests; the charts wait for them (the context
+        // at most CONTEXT_WAIT_MS).
+        const livePromise = loadLivePrediction();
+        const contextSource: Promise<PredictionContextSource | null> = livePromise.then(
+            (live) => live.awaitContextSource(server, eventId),
+            () => null,
+        );
         try {
             // Check SWR caches for heavy timeline and kline data
             const cachedTimeline = getCachedTimeline(server, eventId);
@@ -268,8 +332,20 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
             const [latestRes, timelineRes, klineRes] = await Promise.all(fetchPromises);
             clearTimeout(timeoutId);
 
-            if (latestRes && latestRes.ok) {
-                const latest: RkLatestResponse = await latestRes.json();
+            const latest: RkLatestResponse | null = latestRes.ok ? await latestRes.json() : null;
+            // rk can list a running event without any tiers (JP #218); the v2 snapshot of the same event fills in.
+            // A running event whose v2 load fails goes to the fallback below and rejects if that fails too, so the
+            // page reports the failure and its poll retries; other events keep their empty rk result.
+            if (latest && !(Array.isArray(latest.items) && latest.items.length > 0)) {
+                const realtime = await buildPredictionDataFromRealtimeV2(server, eventId).catch((err: unknown) => {
+                    if (latest.status === 'active') throw err;
+                    return null;
+                });
+                if (realtime) return realtime;
+            }
+
+            if (latest) {
+                const live = await livePromise;
                 let timeline: RkTimelineResponse;
                 if (cachedTimeline) {
                     timeline = cachedTimeline;
@@ -345,14 +421,24 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                     eventEndAt = eventStartAt + (9 * 24 * 3600000);
                 }
 
-                const isWorldLinkEvent = isWorldLink(eventMeta);
-                const eventType = isWorldLinkEvent ? 'world_bloom' : (eventMeta?.event_type || 'marathon');
-                const bonusPercent = isWorldLinkEvent ? 990 : 475;
+                const context = live.predictionContextFor(await contextSource, { kind: 'overall' }, tierScoreList(latest.items), {
+                    region: server,
+                    eventId,
+                    eventType: eventMeta?.event_type,
+                    startAt: eventStartAt,
+                    endAt: eventEndAt,
+                    chapterCharacterId: null,
+                    chapterNo: null,
+                });
 
-                // ── Build charts from latest + history + high-order prediction engine ───
+                // ── Build charts from latest + history + prediction engine ───
                 const charts = latest.items.map(item => {
                     const rankHistory = historyByRank.get(item.rank) ?? [];
-                    const HistoryPoints = rankHistory.map(h => ({ t: h.t, y: h.score }));
+                    const timelinePoints = rankHistory.map(h => ({ t: h.t, y: h.score }));
+                    // Running tiers go through the model; rk's own prediction is not monotone across tiers.
+                    const HistoryPoints = isActive
+                        ? historyEndingOnSnapshot(timelinePoints, context.scopeStartAt, updatedAt, item.score)
+                        : timelinePoints;
 
                     let predictedScore = item.prediction ?? 0;
                     let predictedScoreP10: number | undefined;
@@ -361,16 +447,14 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                         .filter(h => h.prediction != null)
                         .map(h => ({ t: h.t, y: h.prediction! }));
 
-                    // Run the AkiYome v2.0.0-Tori Bayesian-Kalman engine
-                    if (isActive && HistoryPoints.length > 0 && item.rank <= 10000) {
-                        const result = calculateEventPrediction({
+                    if (isActive && HistoryPoints.length > 0) {
+                        const result = live.calculateEventPrediction({
                             server,
                             rank: item.rank,
                             startAt: eventStartAt,
                             endAt: eventEndAt,
                             historyPoints: HistoryPoints,
-                            eventType,
-                            bonusPercent,
+                            context,
                         });
 
                         predictedScore = result.predictedScore;

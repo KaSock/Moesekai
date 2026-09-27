@@ -8,11 +8,13 @@ interface PredictionChartProps {
     data: RankChart;
     height?: number;
     className?: string;
+    /** Show the prediction at every rank; by default only up to T10000 (the /prediction page's range). */
+    showPredictionAtAllRanks?: boolean;
 }
 
-export default function PredictionChart({ data, height, className }: PredictionChartProps) {
+export default function PredictionChart({ data, height, className, showPredictionAtAllRanks = false }: PredictionChartProps) {
     const { t, formatNumber } = useI18n();
-    const showPrediction = data.Rank <= 10000;
+    const showPrediction = showPredictionAtAllRanks || data.Rank <= 10000;
     const actualScoreLabel = t("page.prediction.chart.actualScore");
     const predictedScoreLabel = t("page.prediction.chart.predictedScore");
 
@@ -191,7 +193,7 @@ export default function PredictionChart({ data, height, className }: PredictionC
                         </div>
                         {data.PredictedScoreP10 != null && data.PredictedScoreP90 != null && (
                             <div className="text-[10px] text-slate-400 font-mono">
-                                90% CI: {formatNumber(data.PredictedScoreP10)} ~ {formatNumber(data.PredictedScoreP90)}
+                                80% CI: {formatNumber(data.PredictedScoreP10)} ~ {formatNumber(data.PredictedScoreP90)}
                             </div>
                         )}
                     </div>

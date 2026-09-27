@@ -121,8 +121,13 @@ export const ZH_TW_SEO_PAGE_METADATA = {
     ),
     prediction_next: page(
         "活動預測 Next",
-        "全新 AkiYome v2.0.0-Tori 預測模型與衝榜目標規劃器，支援 World Link 3 獨立章節預測、貝葉斯-卡爾曼即時擬合與多人協力周回分析。",
-        ["活動預測 Next", "AkiYome", "World Link預測", "衝榜規劃"],
+        "全新 AkiYome v3.0.0 預測模型：依活動類型與 World Link 各期分組擬合歷史榜線，經滾動回測校準 P10–P90 區間，支援 World Link 獨立章節預測。",
+        ["活動預測 Next", "AkiYome", "World Link預測"],
+    ),
+    prediction_planner: page(
+        "衝榜規劃器",
+        "依 Project SEKAI 每期活動各自的規則（World Link 章節、終章、疲勞槽、Auto 特殊措施等）與你的隊伍、時間預算，計算達成目標檔位所需的每日打歌時長、火數與體力。",
+        ["衝榜規劃器", "衝榜規劃", "活動檔位", "火數計算", "體力計算", "World Link"],
     ),
     deck_recommend: page(
         "組隊推薦",

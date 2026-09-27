@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "@/components/LocalizedLink";
 import Image from "next/image";
 import MainLayout from "@/components/MainLayout";
@@ -7,38 +7,20 @@ import PredictionChart from "@/components/events/PredictionChart";
 import PGAIChart from "@/components/events/PGAIChart";
 import Sparkline from "@/components/events/Sparkline";
 import ActivityStats from "@/components/events/ActivityStats";
-import EventGoalPlanner from "@/components/events/EventGoalPlanner";
+import { PredictionServerEventControls, PredictionWlChapterBar } from "@/components/prediction/PredictionEventPicker";
+import PlannerEntryCard from "@/components/prediction/PlannerEntryCard";
 import { useI18n } from "@/contexts/I18nContext";
-import { fetchPredictionData, fetchEventList } from "@/lib/prediction-api";
-import {
-    subscribeRankingSync,
-    applyLiveSyncToPrediction,
-    extractTierScoresFromEntries,
-    LiveRankingSyncPayload,
-    publishRankingSync,
-} from "@/lib/ranking-sync";
-import { PredictionData, EventListItem, ServerType, TierKLine, RankChart, KLinePoint } from "@/types/prediction";
+import { PredictionData, TierKLine } from "@/types/prediction";
 import { IEventInfo, EventType, getEventStatus, EVENT_STATUS_DISPLAY } from "@/types/events";
 import { useTheme } from "@/contexts/ThemeContext";
-import { fetchMasterData, fetchMasterDataForServer } from "@/lib/fetch";
-import { getEventBannerUrl, getEventLogoUrl, getCharacterIconUrl } from "@/lib/assets";
+import { getEventBannerUrl, getEventLogoUrl } from "@/lib/assets";
 import { getCharacterName } from "@/lib/i18n";
-import { getWl3SimulationGroupByEventId } from "@/lib/world-bloom-simulation";
-import { fetchLatestV2, fetchWorldLinkLatestV2, fetchWorldLinkTierSeriesV2 } from "@/lib/realtime-ranking-next-api";
-import { WorldLinkSnapshotV2, SeriesPoint } from "@/types/realtime-ranking-next";
-import { calculateEventPrediction } from "@/lib/prediction-engine";
-import { saveWorldLinkSnapshotToStorage, fetchWorldLinkArchive } from "@/lib/world-link-archive";
-
-interface WorldBloomChapter {
-    id: number;
-    eventId: number;
-    gameCharacterId: number;
-    chapterNo: number;
-    chapterStartAt: number;
-    aggregateAt: number;
-    chapterEndAt: number;
-    isSupplemental?: boolean;
-}
+import {
+    usePredictionEvent,
+    findActiveWlChapter,
+    looksLikeWorldLinkEvent,
+    PREDICTION_RANK_TIERS,
+} from "@/lib/prediction/use-prediction-event";
 
 interface LegacyTierKline {
     rank: number;
@@ -50,566 +32,33 @@ interface LegacyTierKline {
     currentIndex?: number;
 }
 
-// Available rank tiers
-const RANK_TIERS = [50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 5000, 10000];
-
 export default function PredictionNextClient() {
     const { t, formatDate, formatNumber } = useI18n();
-    const { assetSource, themeColor, serverSource } = useTheme();
-    const [server, setServer] = useState<ServerType>(() => (serverSource === "jp" ? "jp" : "cn"));
-    const hasManualServerOverride = useRef(false);
-    const [events, setEvents] = useState<EventListItem[]>([]);
-    const [masterEvents, setMasterEvents] = useState<IEventInfo[]>([]);
-    const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
-    const [predictionData, setPredictionData] = useState<PredictionData | null>(null);
+    const { assetSource, themeColor } = useTheme();
+    const eventData = usePredictionEvent();
+    const {
+        server,
+        selectedEventId,
+        eventMeta,
+        masterEvent,
+        eventWorldBlooms,
+        isWorldBloomEvent,
+        selectedWlChapter,
+        setSelectedWlChapter,
+        activePredictionData,
+        scopeStartAt,
+        scopeEndAt,
+        loading,
+        error,
+        now,
+        worldLinkSnapshot,
+    } = eventData;
     const [selectedRank, setSelectedRank] = useState<number>(100);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [eventsLoading, setEventsLoading] = useState(true);
-    const [worldBlooms, setWorldBlooms] = useState<WorldBloomChapter[]>([]);
-    const [selectedWlChapter, setSelectedWlChapter] = useState<'overall' | number>('overall');
-    const [worldLinkSnapshot, setWorldLinkSnapshot] = useState<WorldLinkSnapshotV2 | null>(null);
-    const [chapterTierSeries, setChapterTierSeries] = useState<Record<string, SeriesPoint[]> | null>(null);
 
-    // Live Clock for relative time & progress
-    const [now, setNow] = useState(() => Date.now());
-
-    useEffect(() => {
-        const timer = setInterval(() => setNow(Date.now()), 1000);
-        return () => clearInterval(timer);
-    }, []);
-
-    // Sync server selection when global data server setting changes
-    useEffect(() => {
-        if (!hasManualServerOverride.current) {
-            const targetServer: ServerType = serverSource === "jp" ? "jp" : "cn";
-            if (targetServer !== server) {
-                setServer(targetServer);
-                setSelectedEventId(null);
-                setSelectedWlChapter('overall');
-                setEvents([]);
-                setPredictionData(null);
-                setEventsLoading(true);
-            }
-        }
-    }, [serverSource, server]);
-
-    // Fetch master data for assets matching currently selected server
-    useEffect(() => {
-        fetchMasterDataForServer<IEventInfo[]>(server, "events.json")
-            .then(setMasterEvents)
-            .catch(() => {
-                fetchMasterData<IEventInfo[]>("events.json").then(setMasterEvents).catch(console.error);
-            });
-        fetchMasterDataForServer<WorldBloomChapter[]>(server, "worldBlooms.json")
-            .then(setWorldBlooms)
-            .catch(() => {
-                fetchMasterData<WorldBloomChapter[]>("worldBlooms.json").then(setWorldBlooms).catch(console.error);
-            });
-    }, [server]);
-
-    // Handle server switch safely
-    const handleServerChange = (newServer: ServerType) => {
-        if (newServer === server) return;
-        hasManualServerOverride.current = true;
-        setEventsLoading(true);
-        setError(null);
-        setServer(newServer);
-        setSelectedEventId(null); // Clear selection to prevent invalid fetch
-        setSelectedWlChapter('overall');
-        setEvents([]); // Clear list
-        setPredictionData(null); // Clear data
-    };
-
-    const handleEventChange = (eventId: number) => {
-        setError(null);
-        setLoading(true);
-        setSelectedEventId(eventId);
-        setSelectedWlChapter('overall');
-    };
-
-    // Fetch events list when server changes
-    useEffect(() => {
-        fetchEventList(server)
-            .then(data => {
-                if (!Array.isArray(data)) {
-                    setEvents([]);
-                    // If data is invalid, selectedEventId stays null
-                    return;
-                }
-                // Sort: active first, then by ID descending (latest first)
-                const sortedEvents = [...data].sort((a, b) => {
-                    if (a.is_active && !b.is_active) return -1;
-                    if (!a.is_active && b.is_active) return 1;
-                    return b.id - a.id;
-                });
-                setEvents(sortedEvents);
-
-                // If no event selected (e.g. after server switch), select default
-                if (!selectedEventId) {
-                    const activeEvent = sortedEvents.find(e => e.is_active);
-                    const latestEvent = sortedEvents[0];
-                    const defaultEventId = activeEvent?.id || latestEvent?.id || null;
-                    if (defaultEventId) {
-                        setLoading(true);
-                        setError(null);
-                        setSelectedEventId(defaultEventId);
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('Failed to fetch events:', err);
-                setError(t("page.prediction.errors.eventsFetchFailed"));
-                setEvents([]);
-            })
-            .finally(() => setEventsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [server, t]);
-
-    // Fetch prediction data when event changes
-    useEffect(() => {
-        if (!selectedEventId) {
-            return;
-        }
-
-        fetchPredictionData(selectedEventId, server)
-            .then(data => {
-                setPredictionData(data);
-            })
-            .catch(err => {
-                console.error('Failed to fetch prediction:', err);
-                setError(t("page.prediction.errors.predictionFetchFailed"));
-                setPredictionData(null);
-            })
-            .finally(() => setLoading(false));
-    }, [selectedEventId, server, t]);
-
-    // Live Ranking Sync Subscription: Receive live border cutoffs from realtime ranking or other tabs
-    useEffect(() => {
-        if (!selectedEventId) return;
-
-        const predEvent = events.find(e => e.id == selectedEventId);
-        const masterEvent = masterEvents.find(e => e.id == selectedEventId);
-        const s = predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : masterEvent?.startAt;
-        const e = predEvent?.end_at ? (predEvent.end_at < 10000000000 ? predEvent.end_at * 1000 : predEvent.end_at) : masterEvent?.aggregateAt;
-
-        const unsubscribe = subscribeRankingSync((payload) => {
-            if (payload.region !== server) return;
-            if (payload.eventId && payload.eventId !== selectedEventId) return;
-
-            setPredictionData((prev) => {
-                if (!prev) return prev;
-                return applyLiveSyncToPrediction(prev, payload, server, s, e);
-            });
-        });
-
-        return () => unsubscribe();
-    }, [selectedEventId, server, events, masterEvents]);
-
-    // Extract World Link chapters for current event
-    const eventWorldBlooms = useMemo(() => {
-        if (!selectedEventId) return [];
-        const predEvent = events.find(e => e.id == selectedEventId);
-        const masterEvent = masterEvents.find(e => e.id == selectedEventId);
-
-        // 1. Check matching entries in masterdata worldBlooms.
-        // A finale entry has no gameCharacterId; a finale event has only the overall ranking.
-        const matched = worldBlooms
-            .filter(wb => wb.eventId === selectedEventId && !wb.isSupplemental && wb.gameCharacterId > 0)
-            .sort((a, b) => a.chapterNo - b.chapterNo);
-        if (matched.length > 0) return matched;
-
-        // 2. Event 214 (Again And Again Ambition! - WL3 Shuffle) canonical chapter roster
-        if (selectedEventId === 214) {
-            const s = predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : (masterEvent?.startAt || Date.now());
-            const duration = 48 * 3600000;
-            const roster = [11, 15, 25, 19, 7]; // Ch1: Akito, Ch2: Nene, Ch3: MEIKO, Ch4: Ena, Ch5: Airi
-            return roster.map((charId, idx) => ({
-                id: selectedEventId * 100 + idx + 1,
-                eventId: selectedEventId,
-                gameCharacterId: charId,
-                chapterNo: idx + 1,
-                chapterStartAt: s + idx * duration,
-                aggregateAt: s + (idx + 1) * duration,
-                chapterEndAt: s + (idx + 1) * duration,
-            }));
-        }
-
-        // 3. Check live worldLinkSnapshot groups
-        if (worldLinkSnapshot && Array.isArray(worldLinkSnapshot.groups) && worldLinkSnapshot.groups.length > 0) {
-            const validGroups = worldLinkSnapshot.groups.filter(g => !g.isWorldBloomChapterAggregate && g.gameCharacterId > 0);
-            if (validGroups.length > 0) {
-                const s = predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : (masterEvent?.startAt || Date.now());
-                const e = predEvent?.end_at ? (predEvent.end_at < 10000000000 ? predEvent.end_at * 1000 : predEvent.end_at) : (masterEvent?.aggregateAt || (s + 9 * 24 * 3600000));
-                const totalHours = Math.max(24, (e - s) / 3600000);
-                const chapterHours = Math.min(48, Math.floor(totalHours / validGroups.length));
-
-                const allGroupsHaveSameTimestamps = validGroups.every(g => g.startAt === validGroups[0].startAt && g.endAt === validGroups[0].endAt);
-
-                const liveChapters = validGroups.map((g, idx) => {
-                    const chapterStart = allGroupsHaveSameTimestamps ? (s + idx * chapterHours * 3600000) : g.startAt;
-                    const chapterEnd = allGroupsHaveSameTimestamps ? Math.min(e, s + (idx + 1) * chapterHours * 3600000) : g.endAt;
-                    return {
-                        id: selectedEventId * 100 + idx + 1,
-                        eventId: selectedEventId,
-                        gameCharacterId: g.gameCharacterId,
-                        chapterNo: idx + 1,
-                        chapterStartAt: chapterStart,
-                        aggregateAt: chapterEnd,
-                        chapterEndAt: chapterEnd,
-                    };
-                });
-                return liveChapters;
-            }
-        }
-
-        // 3. Check WL3 simulation group definition
-        const wl3Group = getWl3SimulationGroupByEventId(selectedEventId);
-        if (wl3Group) {
-            const s = predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : (masterEvent?.startAt || Date.now());
-            const durationPerChapter = 48 * 3600000;
-            return wl3Group.members.map((charId, idx) => ({
-                id: selectedEventId * 100 + idx + 1,
-                eventId: selectedEventId,
-                gameCharacterId: charId,
-                chapterNo: idx + 1,
-                chapterStartAt: s + idx * durationPerChapter,
-                aggregateAt: s + (idx + 1) * durationPerChapter,
-                chapterEndAt: s + (idx + 1) * durationPerChapter,
-            }));
-        }
-
-        return [];
-    }, [worldBlooms, selectedEventId, events, masterEvents, worldLinkSnapshot]);
-
-    const activeWlChapter = useMemo(() => {
-        if (selectedWlChapter === 'overall') return null;
-        return eventWorldBlooms.find(wb => wb.gameCharacterId === selectedWlChapter) || null;
-    }, [eventWorldBlooms, selectedWlChapter]);
-
-    const isWorldBloomEvent = useMemo(() => {
-        if (!selectedEventId) return false;
-        const predEvent = events.find(e => e.id == selectedEventId);
-        const masterEvent = masterEvents.find(e => e.id == selectedEventId);
-        const baseName = masterEvent?.name || predEvent?.name || "";
-        return masterEvent?.eventType === "world_bloom" || predEvent?.event_type === "world_bloom"
-            || baseName.toLowerCase().includes("world link")
-            || baseName.toLowerCase().includes("world bloom")
-            || baseName.includes("ワールドリンク")
-            || eventWorldBlooms.length > 0;
-    }, [selectedEventId, events, masterEvents, eventWorldBlooms]);
-
-    // Fetch World Link snapshot (live or fallback to client/static archive)
-    useEffect(() => {
-        if (!selectedEventId || !isWorldBloomEvent) {
-            setWorldLinkSnapshot(null);
-            return;
-        }
-        let isCancelled = false;
-
-        fetchWorldLinkLatestV2(server)
-            .then(async data => {
-                if (isCancelled) return;
-                const hasActiveData = data && Array.isArray(data.groups) && data.groups.some(g => g.entries?.some(e => e.score > 0));
-                if (hasActiveData && (!data.eventId || data.eventId === selectedEventId)) {
-                    setWorldLinkSnapshot(data);
-                    saveWorldLinkSnapshotToStorage(server, selectedEventId, data);
-                } else {
-                    // Try archived or cached snapshot
-                    const archived = await fetchWorldLinkArchive(server, selectedEventId);
-                    if (!isCancelled && archived) {
-                        setWorldLinkSnapshot(archived);
-                    }
-                }
-            })
-            .catch(async () => {
-                if (!isCancelled) {
-                    const archived = await fetchWorldLinkArchive(server, selectedEventId);
-                    if (!isCancelled && archived) {
-                        setWorldLinkSnapshot(archived);
-                    }
-                }
-            });
-
-        return () => {
-            isCancelled = true;
-        };
-    }, [selectedEventId, server, isWorldBloomEvent]);
-
-    // Fetch detailed chapter tier series when a single WL character chapter is selected
-    useEffect(() => {
-        if (!selectedEventId || !isWorldBloomEvent || typeof selectedWlChapter !== 'number') {
-            setChapterTierSeries(null);
-            return;
-        }
-        fetchWorldLinkTierSeriesV2(server, {
-            gameCharacterId: selectedWlChapter,
-            tiers: RANK_TIERS,
-        })
-            .then(series => {
-                setChapterTierSeries(series);
-            })
-            .catch(() => {
-                setChapterTierSeries(null);
-            });
-    }, [selectedEventId, server, isWorldBloomEvent, selectedWlChapter]);
-
-    // 10s Live Background Polling: Fetch fresh realtime board cutoffs and update in-memory predictions
-    useEffect(() => {
-        if (!selectedEventId) return;
-
-        const predEvent = events.find(e => e.id === selectedEventId);
-        const masterEvent = masterEvents.find(e => e.id === selectedEventId);
-        const s = predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : masterEvent?.startAt;
-        const e = predEvent?.end_at ? (predEvent.end_at < 10000000000 ? predEvent.end_at * 1000 : predEvent.end_at) : masterEvent?.aggregateAt;
-
-        const POLL_INTERVAL = 10_000;
-        let isPolling = false;
-
-        const pollTick = async () => {
-            if (isPolling) return;
-            isPolling = true;
-            try {
-                // 1. Fetch fresh standard realtime ranking snapshot
-                const freshSnapshot = await fetchLatestV2(server);
-                if (freshSnapshot && Array.isArray(freshSnapshot.entries) && freshSnapshot.entries.length > 0) {
-                    const tierScores = extractTierScoresFromEntries(freshSnapshot.entries);
-                    const syncPayload: LiveRankingSyncPayload = {
-                        region: server,
-                        eventId: freshSnapshot.eventId || selectedEventId,
-                        updatedAt: freshSnapshot.updatedAt || Date.now(),
-                        tierScores,
-                        source: "prediction-next",
-                    };
-                    setPredictionData(prev => {
-                        if (prev) {
-                            return applyLiveSyncToPrediction(
-                                prev,
-                                syncPayload,
-                                server,
-                                s,
-                                e,
-                                isWorldBloomEvent ? "world_bloom" : undefined,
-                                isWorldBloomEvent ? 990 : 475,
-                            );
-                        }
-                        return prev;
-                    });
-                    setError(null);
-                    publishRankingSync(syncPayload);
-                }
-
-                // 2. Fetch fresh World Link snapshot if World Link event
-                if (isWorldBloomEvent) {
-                    const freshWl = await fetchWorldLinkLatestV2(server);
-                    if (freshWl && Array.isArray(freshWl.groups) && freshWl.groups.length > 0) {
-                        setWorldLinkSnapshot(freshWl);
-                        saveWorldLinkSnapshotToStorage(server, selectedEventId, freshWl);
-                    }
-                }
-            } catch (_err) {
-                // Silent fail during background polling
-            } finally {
-                isPolling = false;
-            }
-        };
-
-        // Fire initial tick immediately and schedule every 10s
-        pollTick();
-        const interval = setInterval(pollTick, POLL_INTERVAL);
-        return () => clearInterval(interval);
-    }, [selectedEventId, server, events, masterEvents, isWorldBloomEvent]);
-
-    // Compute active prediction data based on selected WL chapter vs overall
-    const activePredictionData = useMemo<PredictionData | null>(() => {
-        if (!predictionData) return null;
-
-        const predEvent = events.find(e => e.id === selectedEventId);
-        const masterEvent = masterEvents.find(e => e.id === selectedEventId);
-        const eventStart = predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : (masterEvent?.startAt || Date.now());
-        const eventEnd = predEvent?.end_at ? (predEvent.end_at < 10000000000 ? predEvent.end_at * 1000 : predEvent.end_at) : (masterEvent?.aggregateAt || (eventStart + 9 * 24 * 3600000));
-
-        if (!isWorldBloomEvent || selectedWlChapter === 'overall') {
-            if (isWorldBloomEvent && predictionData.data?.charts) {
-                const enhancedCharts: RankChart[] = predictionData.data.charts.map(chart => {
-                    if (chart.Rank > 10000 || !chart.HistoryPoints || chart.HistoryPoints.length === 0) return chart;
-                    const res = calculateEventPrediction({
-                        server,
-                        rank: chart.Rank,
-                        startAt: eventStart,
-                        endAt: eventEnd,
-                        historyPoints: chart.HistoryPoints,
-                        eventType: "world_bloom",
-                        bonusPercent: 990,
-                    });
-                    return {
-                        ...chart,
-                        PredictedScore: res.predictedScore,
-                        PredictedScoreP10: res.predictedScoreP10,
-                        PredictedScoreP90: res.predictedScoreP90,
-                        PredictPoints: res.predictPoints,
-                    };
-                });
-                const enhancedKlines: TierKLine[] = (predictionData.data.tier_klines || []).map(tk => {
-                    const ch = enhancedCharts.find(c => c.Rank === tk.Rank);
-                    const engineRes = ch && ch.HistoryPoints?.length > 0 ? calculateEventPrediction({
-                        server,
-                        rank: tk.Rank,
-                        startAt: eventStart,
-                        endAt: eventEnd,
-                        historyPoints: ch.HistoryPoints,
-                        eventType: "world_bloom",
-                        bonusPercent: 990,
-                    }) : undefined;
-                    return {
-                        ...tk,
-                        Speed: engineRes?.effectiveHourlySpeed ?? tk.Speed,
-                    };
-                });
-                return {
-                    ...predictionData,
-                    data: {
-                        ...predictionData.data,
-                        charts: enhancedCharts,
-                        tier_klines: enhancedKlines,
-                    },
-                };
-            }
-            return predictionData;
-        }
-
-        const group = worldLinkSnapshot?.groups?.find(g => g.gameCharacterId === selectedWlChapter);
-        const chapter = activeWlChapter || eventWorldBlooms.find(wb => wb.gameCharacterId === selectedWlChapter);
-        const chapterIndex = eventWorldBlooms.findIndex(wb => wb.gameCharacterId === selectedWlChapter);
-        const fallbackDuration = 48 * 3600000;
-        const s = chapter?.chapterStartAt || (eventStart + Math.max(0, chapterIndex) * fallbackDuration);
-        const e = chapter?.aggregateAt || (s + fallbackDuration);
-        const isChapterUnstarted = now < s;
-
-        const calculatedResults: Record<number, ReturnType<typeof calculateEventPrediction>> = {};
-
-        const chapterCharts: RankChart[] = RANK_TIERS.map(rank => {
-            const entry = group?.entries?.find(item => item.rank === rank);
-            const currentScore = isChapterUnstarted ? 0 : (entry?.score || 0);
-
-            let historyPoints: { t: string; y: number }[] = [];
-
-            if (!isChapterUnstarted) {
-                // 1. Prefer true World Link chapter tier series from real-time API
-                const seriesForRank = chapterTierSeries ? (chapterTierSeries[String(rank)] || (chapterTierSeries as Record<string, SeriesPoint[]>)[String(rank)]) : undefined;
-                if (Array.isArray(seriesForRank) && seriesForRank.length > 0) {
-                    historyPoints = seriesForRank.map(pt => ({
-                        t: new Date(pt.t).toISOString(),
-                        y: pt.s,
-                    }));
-                }
-
-                // Ensure history starts cleanly from chapter start (t = s, y = 0)
-                const startIso = new Date(s).toISOString();
-                if (historyPoints.length === 0 || new Date(historyPoints[0].t).getTime() > s + 3600000) {
-                    historyPoints.unshift({ t: startIso, y: 0 });
-                }
-
-                // 2. Ensure current score point is synced to the data snapshot timestamp (avoid client clock drift)
-                const dataTime = Math.min(e, Math.max(s, worldLinkSnapshot?.updatedAt || predictionData.timestamp || s));
-                const dataIso = new Date(dataTime).toISOString();
-                if (historyPoints.length === 1) {
-                    historyPoints.push({ t: dataIso, y: currentScore });
-                } else {
-                    const lastPt = historyPoints[historyPoints.length - 1];
-                    if (dataTime > new Date(lastPt.t).getTime() + 60_000) {
-                        historyPoints.push({ t: dataIso, y: currentScore });
-                    } else {
-                        historyPoints[historyPoints.length - 1] = { t: dataIso, y: currentScore };
-                    }
-                }
-
-                // 3. Interpolate realistic historical S-curve if upstream series API is unavailable
-                if (historyPoints.length <= 2 && currentScore > 0 && dataTime > s) {
-                    const steps = 16;
-                    const totalDur = Math.max(1, e - s);
-                    const currProg = Math.max(0.01, (dataTime - s) / totalDur);
-                    const normCurve = (p: number) => 1.30 * p - 0.30 * p * p;
-                    const denom = Math.max(0.01, normCurve(currProg));
-                    const smoothHistory: { t: string; y: number }[] = [];
-                    for (let i = 0; i <= steps; i++) {
-                        const frac = i / steps;
-                        const tPoint = s + frac * (dataTime - s);
-                        const pPoint = (tPoint - s) / totalDur;
-                        const yPoint = Math.round(currentScore * Math.min(1.0, normCurve(pPoint) / denom));
-                        smoothHistory.push({ t: new Date(tPoint).toISOString(), y: yPoint });
-                    }
-                    historyPoints = smoothHistory;
-                }
-            } else {
-                // Chapter is unstarted: single anchor at chapter start
-                historyPoints = [{ t: new Date(s).toISOString(), y: 0 }];
-            }
-
-            const engineResult = calculateEventPrediction({
-                server,
-                rank,
-                startAt: s,
-                endAt: e,
-                historyPoints,
-                characterId: typeof selectedWlChapter === 'number' ? selectedWlChapter : undefined,
-                bonusPercent: isWorldBloomEvent ? 990 : 475,
-            });
-
-            calculatedResults[rank] = engineResult;
-
-            return {
-                Rank: rank,
-                CurrentScore: currentScore,
-                PredictedScore: engineResult.predictedScore,
-                PredictedScoreP10: engineResult.predictedScoreP10,
-                PredictedScoreP90: engineResult.predictedScoreP90,
-                HistoryPoints: historyPoints,
-                PredictPoints: engineResult.predictPoints,
-            };
-        });
-
-        const dataTimeForChapter = Math.min(e, Math.max(s, worldLinkSnapshot?.updatedAt || predictionData.timestamp || s));
-        const isChapterEnded = dataTimeForChapter >= e || now >= e;
-        const elapsedHours = Math.max(0.1, (dataTimeForChapter - s) / 3600000);
-
-        const tier_klines: TierKLine[] = RANK_TIERS.map(rank => {
-            const entry = group?.entries?.find(item => item.rank === rank);
-            const score = isChapterUnstarted ? 0 : (entry?.score || 0);
-            const engineRes = calculatedResults[rank];
-            const chart = chapterCharts.find(c => c.Rank === rank);
-
-            const speed = (isChapterEnded || isChapterUnstarted)
-                ? 0
-                : (engineRes?.effectiveHourlySpeed || (elapsedHours > 0 ? Math.round(score / elapsedHours) : 0));
-
-            const sparklineData: KLinePoint[] = (chart?.HistoryPoints || []).map(pt => ({
-                t: pt.t,
-                o: pt.y,
-                c: pt.y,
-                l: pt.y,
-                h: pt.y,
-                v: 0,
-            }));
-
-            return {
-                Rank: rank,
-                Data: sparklineData,
-                CurrentIndex: score,
-                Speed: speed,
-                ChangePct: 0,
-            };
-        });
-
-        return {
-            ...predictionData,
-            data: {
-                ...predictionData.data,
-                charts: chapterCharts,
-                tier_klines,
-            },
-        };
-    }, [predictionData, isWorldBloomEvent, selectedWlChapter, worldLinkSnapshot, activeWlChapter, eventWorldBlooms, now, server, chapterTierSeries, events, masterEvents, selectedEventId]);
+    const activeWlChapter = useMemo(
+        () => findActiveWlChapter(eventWorldBlooms, selectedWlChapter),
+        [eventWorldBlooms, selectedWlChapter],
+    );
 
     // Process chart data (trim 1% from start/end) - Replacing original currentChart definition
     const currentChart = useMemo(() => {
@@ -634,19 +83,16 @@ export default function PredictionNextClient() {
     const availableRanks = activePredictionData?.data?.charts?.map(c => c.Rank) || [];
 
     // Prepare Event Banner & Status
+    const dataTimestamp = activePredictionData?.timestamp;
     const eventState = useMemo(() => {
         if (!selectedEventId) return null;
 
-        const predEvent = events.find(e => e.id == selectedEventId);
-        const masterEvent = masterEvents.find(e => e.id == selectedEventId);
+        const predEvent = eventMeta;
 
         if (!predEvent && !masterEvent) return null;
 
         const baseName = masterEvent?.name || predEvent?.name || "";
-        const isWlEvent = masterEvent?.eventType === "world_bloom" || predEvent?.event_type === "world_bloom"
-            || baseName.toLowerCase().includes("world link")
-            || baseName.toLowerCase().includes("world bloom")
-            || baseName.includes("ワールドリンク");
+        const isWlEvent = looksLikeWorldLinkEvent(masterEvent, predEvent);
         const chapterNameSuffix = activeWlChapter
             ? ` · ${t("page.prediction.wl.chapterItem", { no: activeWlChapter.chapterNo, name: getCharacterName(t, activeWlChapter.gameCharacterId) })}`
             : "";
@@ -659,16 +105,9 @@ export default function PredictionNextClient() {
                 : "marathon";
         const assetbundleName = masterEvent?.assetbundleName || "";
 
-        // Timestamps: Prefer active WL chapter timeframe if selected, else prediction schedule / masterdata
-        const s = activeWlChapter
-            ? activeWlChapter.chapterStartAt
-            : (predEvent?.start_at ? (predEvent.start_at < 10000000000 ? predEvent.start_at * 1000 : predEvent.start_at) : masterEvent?.startAt);
-        const e = activeWlChapter
-            ? activeWlChapter.aggregateAt
-            : (predEvent?.end_at ? (predEvent.end_at < 10000000000 ? predEvent.end_at * 1000 : predEvent.end_at) : masterEvent?.aggregateAt);
-
-        const startAt = s || 0;
-        const endAt = e || 0;
+        // Timestamps: the active WL chapter window if selected, else prediction schedule / masterdata
+        const startAt = scopeStartAt || 0;
+        const endAt = scopeEndAt || 0;
 
         const mockEvent: IEventInfo = {
             id: selectedEventId,
@@ -716,12 +155,12 @@ export default function PredictionNextClient() {
 
         // Relative Update Time
         let updateTime = null;
-        if (predictionData?.timestamp) {
-            const diff = now - predictionData.timestamp;
+        if (dataTimestamp) {
+            const diff = now - dataTimestamp;
             const diffSec = Math.max(0, Math.floor(diff / 1000));
             if (diffSec < 60) updateTime = t("page.prediction.relativeTime.secondsAgo", { seconds: diffSec });
             else if (diffSec < 3600) updateTime = t("page.prediction.relativeTime.minutesAgo", { minutes: Math.floor(diffSec / 60) });
-            else updateTime = formatDate(predictionData.timestamp, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+            else updateTime = formatDate(dataTimestamp, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
         }
 
         return {
@@ -737,7 +176,7 @@ export default function PredictionNextClient() {
             },
             isActive
         };
-    }, [selectedEventId, events, masterEvents, predictionData, now, t, formatDate, activeWlChapter]);
+    }, [selectedEventId, eventMeta, masterEvent, dataTimestamp, now, t, formatDate, activeWlChapter, scopeStartAt, scopeEndAt]);
 
     return (
         <MainLayout>
@@ -753,50 +192,7 @@ export default function PredictionNextClient() {
                 </div>
 
                 {/* Controls */}
-                <div className="flex flex-col sm:flex-row gap-4 mb-8 items-center sm:items-stretch">
-                    {/* Server Toggle */}
-                    <div className="flex bg-white rounded-xl border border-slate-200 p-1">
-                        <button
-                            onClick={() => handleServerChange('cn')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${server === 'cn'
-                                ? 'bg-miku text-white shadow-md'
-                                : 'text-slate-600 hover:bg-slate-50'
-                                }`}
-                        >
-                            {t("page.prediction.servers.cn")}
-                        </button>
-                        <button
-                            onClick={() => handleServerChange('jp')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${server === 'jp'
-                                ? 'bg-miku text-white shadow-md'
-                                : 'text-slate-600 hover:bg-slate-50'
-                                }`}
-                        >
-                            {t("page.prediction.servers.jp")}
-                        </button>
-                    </div>
-
-                    {/* Event Selector */}
-                    <div className="flex-1">
-                        <select
-                            value={selectedEventId || ''}
-                            onChange={(e) => handleEventChange(Number(e.target.value))}
-                            disabled={eventsLoading || events.length === 0}
-                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-miku/20 focus:border-miku disabled:opacity-50"
-                        >
-                            {eventsLoading ? (
-                                <option>{t("page.prediction.events.loading")}</option>
-                            ) : events.length === 0 ? (
-                                <option>{t("page.prediction.events.empty")}</option>
-                            ) : (
-                                events.map(event => (
-                                    <option key={event.id} value={event.id}>
-                                        {event.is_active ? '🟢 ' : ''}#{event.id} {event.name}
-                                    </option>
-                                ))
-                            )}
-                        </select>
-                    </div>
+                <PredictionServerEventControls state={eventData}>
                     {/* Warning for >99% progress */}
                     {eventState && eventState.isActive && eventState.banner.progressPercent >= 99 && (
                         <div className="flex items-center gap-2 px-4 py-2 rounded-full border shadow-sm w-full sm:w-auto justify-center sm:justify-start shrink-0"
@@ -823,7 +219,7 @@ export default function PredictionNextClient() {
                             </span>
                         </div>
                     )}
-                </div>
+                </PredictionServerEventControls>
 
                 {/* Error Message */}
                 {error && (
@@ -846,86 +242,7 @@ export default function PredictionNextClient() {
                 {!loading && activePredictionData && (
                     <div className="space-y-6">
                         {/* World Link Chapter Selector - Sticky docked beneath MainNavbar */}
-                        {isWorldBloomEvent && eventWorldBlooms.length > 0 && (
-                            <div className="sticky top-[58px] z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200/90 dark:border-slate-700/90 p-3 shadow-md mb-6 transition-all">
-                                <div className="flex items-center justify-between mb-2.5 px-1">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                                        <span>🌸</span>
-                                        <span>{t("page.prediction.wl.chapters")}</span>
-                                    </span>
-                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                                        {selectedWlChapter === 'overall'
-                                            ? t("page.prediction.wl.overall")
-                                            : activeWlChapter
-                                                ? t("page.prediction.wl.chapterItem", { no: activeWlChapter.chapterNo, name: getCharacterName(t, activeWlChapter.gameCharacterId) })
-                                                : ''}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                    {/* Overall Button */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedWlChapter('overall')}
-                                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
-                                            selectedWlChapter === 'overall'
-                                                ? 'bg-miku text-white border-miku shadow-sm shadow-miku/30'
-                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                        }`}
-                                    >
-                                        <span>🌟</span>
-                                        <span>{t("page.prediction.wl.overall")}</span>
-                                    </button>
-
-                                    {/* Character Chapter Buttons */}
-                                    {eventWorldBlooms.map((wb) => {
-                                        const isSelected = selectedWlChapter === wb.gameCharacterId;
-                                        const isOngoing = now >= wb.chapterStartAt && now <= wb.aggregateAt;
-                                        const isEnded = now > wb.aggregateAt;
-                                        const statusKey = isOngoing ? 'ongoing' : isEnded ? 'ended' : 'upcoming';
-
-                                        return (
-                                            <button
-                                                key={wb.gameCharacterId}
-                                                type="button"
-                                                onClick={() => setSelectedWlChapter(wb.gameCharacterId)}
-                                                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
-                                                    isSelected
-                                                        ? 'bg-miku text-white border-miku shadow-sm shadow-miku/30'
-                                                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                                }`}
-                                            >
-                                                <div className="relative w-4 h-4 rounded-full overflow-hidden shrink-0 border border-white/40">
-                                                    <Image
-                                                        src={getCharacterIconUrl(wb.gameCharacterId)}
-                                                        alt={getCharacterName(t, wb.gameCharacterId)}
-                                                        fill
-                                                        className="object-cover"
-                                                        unoptimized
-                                                    />
-                                                </div>
-                                                <span>
-                                                    {t("page.prediction.wl.chapterItem", {
-                                                        no: wb.chapterNo,
-                                                        name: getCharacterName(t, wb.gameCharacterId)
-                                                    })}
-                                                </span>
-                                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
-                                                    isSelected
-                                                        ? 'bg-white/20 text-white'
-                                                        : isOngoing
-                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                                            : isEnded
-                                                                ? 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                                                }`}>
-                                                    {t(`page.prediction.wl.chapterStatus.${statusKey}`)}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
+                        <PredictionWlChapterBar state={eventData} />
                         {/* Event Banner */}
                         {eventState && (() => {
                             const { banner, isActive } = eventState;
@@ -1144,10 +461,10 @@ export default function PredictionNextClient() {
                                                                 {showPredictionColumns && (
                                                                     <>
                                                                         <td className="px-4 py-3 text-right text-amber-600 font-mono font-bold">
-                                                                            {chart.Rank > 10000 ? '-' : formatNumber(chart.PredictedScore)}
+                                                                            {formatNumber(chart.PredictedScore)}
                                                                         </td>
                                                                         <td className="px-4 py-3 text-right text-slate-500 font-mono">
-                                                                            {chart.Rank > 10000 ? '-' : (isUpcoming ? `+${formatNumber(chart.PredictedScore)}` : `+${formatNumber(chart.PredictedScore - chart.CurrentScore)}`)}
+                                                                            {isUpcoming ? `+${formatNumber(chart.PredictedScore)}` : `+${formatNumber(chart.PredictedScore - chart.CurrentScore)}`}
                                                                         </td>
                                                                         <td className="px-4 py-3 text-right font-mono">
                                                                             {tierStats ? (
@@ -1167,7 +484,7 @@ export default function PredictionNextClient() {
                                                                             <div className="flex justify-center items-center">
                                                                                 <Sparkline
                                                                                     data={historyData}
-                                                                                    prediction={(predictData.length > 0 && chart.Rank <= 10000) ? predictData : undefined}
+                                                                                    prediction={predictData.length > 0 ? predictData : undefined}
                                                                                     progress={isUpcoming ? 0.05 : Math.max(0.05, Math.min(0.95, (banner.progressPercent || 50) / 100))}
                                                                                     color={trendColor}
                                                                                     width={100}
@@ -1185,15 +502,12 @@ export default function PredictionNextClient() {
                                         </div>
                                     </div>
 
-                                    {/* Row 3: Goal Strategy Planner (When Event is Active or Upcoming) */}
+                                    {/* Row 3: Goal planner entry (When Event is Active or Upcoming) */}
                                     {showPredictionColumns && (
-                                        <EventGoalPlanner
+                                        <PlannerEntryCard
                                             server={server}
-                                            charts={activePredictionData.data.charts || []}
-                                            startAt={activeWlChapter ? activeWlChapter.chapterStartAt : banner.mockEvent.startAt}
-                                            endAt={activeWlChapter ? activeWlChapter.aggregateAt : banner.mockEvent.aggregateAt}
-                                            isActive={isActive}
-                                            isWorldBloom={isWorldBloomEvent}
+                                            eventId={banner.mockEvent.id}
+                                            chapter={isChapterView ? selectedWlChapter : "overall"}
                                         />
                                     )}
 
@@ -1207,7 +521,7 @@ export default function PredictionNextClient() {
                                                     </h3>
                                                     {/* Rank Selector for Chart */}
                                                     <div className="flex gap-2 overflow-x-auto pb-2 w-full sm:w-auto sm:flex-wrap sm:justify-end no-scrollbar">
-                                                        {(availableRanks.length > 0 ? availableRanks : RANK_TIERS).map(rank => (
+                                                        {(availableRanks.length > 0 ? availableRanks : PREDICTION_RANK_TIERS).map(rank => (
                                                             <button
                                                                 key={rank}
                                                                 onClick={() => setSelectedRank(rank)}
@@ -1223,7 +537,7 @@ export default function PredictionNextClient() {
                                                 </div>
 
                                                 {currentChart ? (
-                                                    <PredictionChart data={currentChart} className="h-[350px] sm:h-[450px]" />
+                                                    <PredictionChart data={currentChart} className="h-[350px] sm:h-[450px]" showPredictionAtAllRanks />
                                                 ) : (
                                                     <div className="h-[350px] sm:h-[450px] flex items-center justify-center text-slate-400 bg-slate-50/50 rounded-xl">
                                                         {t("page.prediction.chart.noTierData", { rank: selectedRank })}
@@ -1247,7 +561,7 @@ export default function PredictionNextClient() {
 
                 {/* Empty State */}
                 {
-                    !loading && !predictionData && !error && selectedEventId && (
+                    !loading && !activePredictionData && !error && selectedEventId && (
                         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                             <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />

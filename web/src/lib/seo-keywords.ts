@@ -593,15 +593,31 @@ export const SEO_PAGE_METADATA = {
     "/prediction-next",
     { "zh-CN": "活动预测 Next", "en-US": "Event Prediction Next", "ja-JP": "イベント予測 Next" },
     {
-      "zh-CN": "全新 AkiYome v2.0.0-Tori 预测模型与冲榜目标规划器，支持 World Link 3 独立章节预测、贝叶斯-卡尔曼实时拟合与多人协力周回分析。",
-      "en-US": "Next-generation Project SEKAI event border predictions powered by AkiYome v2.0.0-Tori Bayesian-Kalman engine, World Link 3 chapter predictions, and goal strategy planner.",
-      "ja-JP": "AkiYome v2.0.0-Tori ベイズ・カルマン予測エンジンを搭載した新世代イベントボーダー予測と目標プランナー。World Link 3 各章予測に対応。",
-      "ko-KR": "AkiYome v2.0.0-Tori 베이지안-칼만 예측 엔진과 이벤트 목표 전략 플래너를 탑재한 차세대 Project SEKAI 이벤트 예측.",
+      "zh-CN": "全新 AkiYome v3.0.0 预测模型：按活动类型与 World Link 各期分组拟合历史榜线，经滚动回测校准 P10–P90 区间，支持 World Link 独立章节预测。",
+      "en-US": "Next-generation Project SEKAI event border predictions from the AkiYome v3.0.0 fusion model, fitted on past borders per event type and World Link edition and calibrated by rolling backtests, with World Link chapter predictions.",
+      "ja-JP": "AkiYome v3.0.0 融合モデルによる新世代イベントボーダー予測。イベント種別とワールドリンク各期ごとに過去のボーダーから学習し、ローリングバックテストで予測区間を校正。ワールドリンク各チャプターの予測に対応。",
+      "ko-KR": "AkiYome v3.0.0 융합 모델을 탑재한 차세대 Project SEKAI 이벤트 보더 예측. 이벤트 유형과 월드 링크 회차별로 과거 보더를 학습하고 롤링 백테스트로 예측 구간을 보정하며, 월드 링크 챕터별 예측을 지원합니다.",
     },
     {
-      "zh-CN": ["活动预测 Next", "AkiYome", "World Link预测", "冲榜规划"],
+      "zh-CN": ["活动预测 Next", "AkiYome", "World Link预测"],
       "en-US": ["event prediction next", "AkiYome", "world link prediction", "border forecast"],
       "ja-JP": ["イベント予測 Next", "AkiYome", "ボーダー予測", "ワールドリンク予測"],
+    },
+  ),
+  prediction_planner: definePage(
+    "/prediction-next/planner",
+    { "zh-CN": "冲榜规划器", "en-US": "Ranking Goal Planner", "ja-JP": "ランキングプランナー", "ko-KR": "랭킹 목표 플래너" },
+    {
+      "zh-CN": "按 Project SEKAI 每期活动各自的规则（World Link 章节、终章、疲劳槽、Auto 特殊措施等）与你的卡组、时间预算，计算达成目标档位所需的每日打歌时长、火数与体力。",
+      "en-US": "Plan a Project SEKAI ranking goal: from each event's own rules (World Link chapters, finales, refresh gauge, Auto special measures), your deck and your time budget, work out the daily play time and stamina needed to reach a target tier.",
+      "ja-JP": "Project SEKAI の各イベント固有のルール（ワールドリンクのチャプター、フィナーレ、リフレッシュゲージ、オートライブ特別措置など）と編成・プレイ可能時間から、目標順位に必要な1日のプレイ時間とライブボーナスを計算します。",
+      "ko-KR": "Project SEKAI 각 이벤트 고유의 규칙(월드 링크 챕터, 피날레, 리프레시 게이지, 오토 특별 조치 등)과 덱, 가용 시간을 바탕으로 목표 순위에 필요한 하루 플레이 시간과 라이브 보너스를 계산합니다.",
+    },
+    {
+      "zh-CN": ["冲榜规划器", "冲榜规划", "活动档位", "火数计算", "体力计算", "World Link"],
+      "en-US": ["ranking planner", "event goal planner", "target tier", "stamina calculator", "world link"],
+      "ja-JP": ["ランキング目標", "イベラン", "ボーダー", "炊き数計算", "ワールドリンク"],
+      "ko-KR": ["랭킹 플래너", "이벤트 목표", "보더", "라이브 보너스 계산", "월드 링크"],
     },
   ),
   deck_recommend: definePage(

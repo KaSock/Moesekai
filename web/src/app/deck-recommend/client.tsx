@@ -20,9 +20,7 @@ import ActiveRulesSummary from "@/components/deck-recommend/ActiveRulesSummary";
 import { fetchMasterDataForServer } from "@/lib/fetch";
 import { getCharacterIconUrl } from "@/lib/assets";
 import {
-    getAccounts,
     getOAuthAccessTokenForGameUser,
-    isValidServer,
     SERVER_OPTIONS,
     type ServerType,
 } from "@/lib/account";
@@ -34,7 +32,6 @@ import { getCharacterName } from "@/lib/i18n";
 import AccountSelector from "@/components/AccountSelector";
 import EventSelector from "@/components/deck-recommend/EventSelector";
 import MusicSelector from "@/components/deck-recommend/MusicSelector";
-import { preloadDeckEngine } from "@/lib/deck-engine/wasm-loader";
 import { type OverrideCatalogItem } from "@/components/deck-recommend/DataOverridePanel";
 import {
     buildDeckWorkerArgs,
@@ -44,12 +41,20 @@ import {
 } from "@/lib/deck-recommend/worker-args";
 import { SnowyDataProvider } from "@/lib/deck-recommend/data-provider";
 import type {
+    DeckMusicRow,
     DeckRecommendMode,
     DeckResultDeck,
     DeckTrainingConfig,
     DeckUserCard,
-    DeckWorkerOutput,
 } from "@/lib/deck-recommend/engine-types";
+import {
+    DECK_SAVED_CONFIG_KEY as SAVED_CONFIG_KEY,
+    DECK_SERVER_STORAGE_KEY as SERVER_STORAGE_KEY,
+    DECK_USER_ID_STORAGE_KEY as USER_ID_STORAGE_KEY,
+    parseSavedDeckConfig,
+    resolveDeckAccount,
+} from "@/lib/deck-recommend/planner-args";
+import { useDeckEngine } from "@/lib/deck-recommend/use-deck-engine";
 import "./deck-recommend.css";
 
 type RawRow = Record<string, unknown>;
@@ -289,25 +294,6 @@ const VIRTUAL_SINGER_ID_MIN = 21;
 
 type TranslationFn = ReturnType<typeof useI18n>["t"];
 
-const USER_ID_STORAGE_KEY = "deck_recommend_userid";
-const SERVER_STORAGE_KEY = "deck_recommend_server";
-const SAVED_CONFIG_KEY = "deck_recommend_saved_config_v2";
-
-
-
-function getErrorMessage(error: string, t: TranslationFn): string {
-    switch (error) {
-        case "USER_NOT_FOUND":
-            return t("page.deckRecommend.errors.userNotFound");
-        case "API_NOT_PUBLIC":
-            return t("page.deckRecommend.errors.apiNotPublic");
-        default:
-            if (error.includes("404")) return t("page.deckRecommend.errors.userNotFound404");
-            if (error.includes("403")) return t("page.deckRecommend.errors.apiNotPublic403");
-            return error;
-    }
-}
-
 function formatBonusValue(value: number): string {
     const rounded = Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
@@ -423,12 +409,7 @@ function CharacterMultiGrid({
 }
 
 // ==================== Song ranking panel ====================
-interface MusicRankRow {
-    musicId: number;
-    difficulty: string;
-    liveScore: number;
-    eventPoint?: number;
-}
+type MusicRankRow = DeckMusicRow;
 
 function SongRankingPanel({
     rows,
@@ -698,19 +679,13 @@ export default function DeckRecommendClient() {
 
     const [isCustomRulesOpen, setIsCustomRulesOpen] = useState(false);
 
-    // Run state
-    const [isCalculating, setIsCalculating] = useState(false);
-    const [, setProgressStage] = useState("idle");
-    const [progressPercent, setProgressPercent] = useState(0);
-    const [progressLabel, setProgressLabel] = useState("");
-    const [error, setError] = useState<string | null>(null);
-    const [results, setResults] = useState<DeckResultDeck[] | null>(null);
-    const [userCards, setUserCards] = useState<DeckUserCard[]>([]);
-    const [duration, setDuration] = useState<number | null>(null);
-    const [musicByDeck, setMusicByDeck] = useState<Record<number, MusicRankRow[] | null>>({});
-    const [musicLoadingByDeck, setMusicLoadingByDeck] = useState<Record<number, boolean>>({});
+    // Run state (resident engine worker)
+    const {
+        isCalculating, progressPercent, progressLabel, error, setError, results, userCards,
+        duration, musicByDeck, musicLoadingByDeck, warmup, runDeck, requestDeckMusic,
+        cancel: handleCancel,
+    } = useDeckEngine();
     const [savedHint, setSavedHint] = useState(false);
-    const workerRef = useRef<Worker | null>(null);
     const calculateScrollYRef = useRef<number | null>(null);
 
     // Card master + music metas for result rendering
@@ -819,110 +794,18 @@ export default function DeckRecommendClient() {
         };
     }, []);
 
-    const getOrCreateWorker = useCallback(() => {
-        if (workerRef.current) return workerRef.current;
-        const worker = new Worker(new URL("@/lib/deck-recommend/engine-worker.ts", import.meta.url));
-        type WorkerMessage =
-            | DeckWorkerOutput
-            | { type: "music"; requestId: number; rows: MusicRankRow[] }
-            | { type: "warm"; ready: boolean };
-        worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-            const data = event.data;
-            if (data.type === "warm") {
-                return;
-            }
-            if (data.type === "progress") {
-                setProgressStage(data.stage);
-                setProgressPercent(data.percent);
-                setProgressLabel(data.progressKey ? t(data.progressKey) : data.stageLabel ?? "");
-                return;
-            }
-            if (data.type === "music") {
-                const deckRank = data.requestId ?? 0;
-                setMusicLoadingByDeck((prev) => ({ ...prev, [deckRank]: false }));
-                setMusicByDeck((prev) => ({ ...prev, [deckRank]: data.rows ?? [] }));
-                return;
-            }
-            if (data.error) {
-                setError(getErrorMessage(data.error, t));
-            } else {
-                setResults(data.result ?? []);
-                if (data.userCards) setUserCards(data.userCards);
-                setDuration(data.duration ?? null);
-                if (calculateScrollYRef.current !== null) {
-                    const savedY = calculateScrollYRef.current;
-                    requestAnimationFrame(() => {
-                        window.scrollTo({ top: savedY, behavior: "instant" });
-                        requestAnimationFrame(() => {
-                            window.scrollTo({ top: savedY, behavior: "instant" });
-                            calculateScrollYRef.current = null;
-                        });
-                    });
-                }
-            }
-            setIsCalculating(false);
-            setProgressPercent(0);
-        };
-        worker.onerror = (err) => {
-            setError(t("page.deckRecommend.errors.workerError", { message: err.message }));
-            setIsCalculating(false);
-            setProgressPercent(0);
-        };
-        workerRef.current = worker;
-        return worker;
-    }, [t]);
-
-    // 页面加载及区服/账号切换时后台预热
+    // Background warmup on load and on server/account change; the hook terminates the worker on unmount.
     useEffect(() => {
-        preloadDeckEngine();
-        const worker = getOrCreateWorker();
-        const trimmedUid = userId.trim();
-        const oauthAccessToken = trimmedUid ? getOAuthAccessTokenForGameUser(server, trimmedUid) : undefined;
-        worker.postMessage({
-            warmup: {
-                server,
-                userId: trimmedUid || undefined,
-                oauthAccessToken,
-            },
-        });
-    }, [server, userId, getOrCreateWorker]);
-
-    // 卸载组件时终止常驻 worker
-    useEffect(() => {
-        return () => {
-            if (workerRef.current) {
-                workerRef.current.terminate();
-                workerRef.current = null;
-            }
-        };
-    }, []);
+        warmup(server, userId);
+    }, [server, userId, warmup]);
 
     // Restore last used account + saved config
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
-        const storedServer = localStorage.getItem(SERVER_STORAGE_KEY);
-        const storedUserId = localStorage.getItem(USER_ID_STORAGE_KEY);
-        const savedConfig = localStorage.getItem(SAVED_CONFIG_KEY);
-        let restored: Partial<SavedConfig> | null = null;
-        if (savedConfig) {
-            try {
-                const parsed = JSON.parse(savedConfig) as Partial<SavedConfig>;
-                restored = { ...parsed, cardConfig: { ...DEFAULT_CARD_CONFIG, ...(parsed.cardConfig ?? {}) } };
-            } catch {
-                // ignore broken config
-            }
-        }
-        let targetServer = storedServer;
-        let targetUserId = storedUserId;
-        if (!targetUserId) {
-            const accounts = getAccounts();
-            if (accounts.length > 0) {
-                targetUserId = accounts[0].gameId;
-                targetServer = accounts[0].server;
-            }
-        }
-        if (targetServer && isValidServer(targetServer)) setServer(targetServer);
-        if (targetUserId) setUserId(targetUserId);
+        const restored = parseSavedDeckConfig(localStorage.getItem(SAVED_CONFIG_KEY));
+        const account = resolveDeckAccount();
+        if (account.server) setServer(account.server);
+        if (account.userId) setUserId(account.userId);
         if (restored) setState((prev) => ({ ...prev, ...restored }));
     }, []);
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -1080,6 +963,18 @@ export default function DeckRecommendClient() {
         mysekaiFixtureBonusRate, mysekaiFixtureOverrides, singleCardOverrides, limit, timeoutSeconds,
     ]);
 
+    const restoreCalculateScroll = useCallback(() => {
+        if (calculateScrollYRef.current === null) return;
+        const savedY = calculateScrollYRef.current;
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: savedY, behavior: "instant" });
+            requestAnimationFrame(() => {
+                window.scrollTo({ top: savedY, behavior: "instant" });
+                calculateScrollYRef.current = null;
+            });
+        });
+    }, []);
+
     const handleCalculate = async () => {
         if (!userId.trim()) {
             setError(t("page.deckRecommend.errors.userRequired"));
@@ -1122,58 +1017,34 @@ export default function DeckRecommendClient() {
         }
 
         calculateScrollYRef.current = typeof window !== "undefined" ? window.scrollY : null;
-        setError(null);
-        setIsCalculating(true);
-        setResults(null);
-        setProgressPercent(5);
-        setProgressLabel(t("page.deckRecommend.progress.fetchingUserData"));
-
-        const bonusTargetsParsed = target === "bonus" && bonusTargets.trim() ? parseBonusTargets(bonusTargets) : null;
-        if (target === "bonus" && bonusTargets.trim() && !bonusTargetsParsed) {
-            setError(t("page.deckRecommend.errors.bonusTargetsInvalid"));
-            setIsCalculating(false);
-            return;
-        }
-
-        const workerArgs = buildDeckWorkerArgs(state, {
-            server,
-            userId,
-            bonusTargets: bonusTargetsParsed,
-        });
-
-        const worker = getOrCreateWorker();
-        const oauthAccessToken = getOAuthAccessTokenForGameUser(server, userId.trim());
-        worker.postMessage({ args: { ...workerArgs, oauthAccessToken } });
+        runDeck(() => {
+            const bonusTargetsParsed = target === "bonus" && bonusTargets.trim() ? parseBonusTargets(bonusTargets) : null;
+            if (target === "bonus" && bonusTargets.trim() && !bonusTargetsParsed) {
+                return { error: t("page.deckRecommend.errors.bonusTargetsInvalid") };
+            }
+            return buildDeckWorkerArgs(state, {
+                server,
+                userId,
+                bonusTargets: bonusTargetsParsed,
+            });
+        }, { onSuccess: restoreCalculateScroll });
     };
 
-    const handleCancel = useCallback(() => {
-        if (workerRef.current) {
-            workerRef.current.terminate();
-            workerRef.current = null;
-        }
-        setIsCalculating(false);
-        setProgressPercent(0);
-    }, []);
-
     const requestMusic = (deck: DeckResultDeck) => {
-        const worker = getOrCreateWorker();
         if (musicLoadingByDeck[deck.rank]) return;
-        setMusicLoadingByDeck((prev) => ({ ...prev, [deck.rank]: true }));
-        worker.postMessage({
-            music: {
-                requestId: deck.rank,
-                liveType,
-                eventType: selectedEventType ?? undefined,
-                teammates: {
-                    power: multiTeammatePower ? parseInt(multiTeammatePower) : undefined,
-                    scoreUp: multiTeammateScoreUp ? parseInt(multiTeammateScoreUp) : undefined,
-                },
-                deck: {
-                    totalPower: deck.totalPower,
-                    eventBonusRate: deck.eventBonus ?? 0,
-                    supportDeckBonusRate: 0,
-                    cards: deck.cards.map((c) => ({ skillScoreUp: c.skillScoreUp, skillLifeRecovery: 0 })),
-                },
+        requestDeckMusic({
+            requestId: deck.rank,
+            liveType,
+            eventType: selectedEventType ?? undefined,
+            teammates: {
+                power: multiTeammatePower ? parseInt(multiTeammatePower) : undefined,
+                scoreUp: multiTeammateScoreUp ? parseInt(multiTeammateScoreUp) : undefined,
+            },
+            deck: {
+                totalPower: deck.totalPower,
+                eventBonusRate: deck.eventBonus ?? 0,
+                supportDeckBonusRate: 0,
+                cards: deck.cards.map((c) => ({ skillScoreUp: c.skillScoreUp, skillLifeRecovery: 0 })),
             },
         });
     };

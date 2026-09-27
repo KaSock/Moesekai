@@ -6,22 +6,19 @@
 //
 // Benefits:
 // 1. Zero redundant network requests when switching between or viewing both pages.
-// 2. Real-time incremental prediction re-calculation in-memory (< 1ms).
+// 2. Real-time incremental prediction re-calculation in-memory (applyLiveSyncToPrediction in
+//    lib/prediction/live-prediction.ts; this module stays engine-free for the realtime ranking pages).
 // 3. SWR caching for heavy historical timeline/kline data, cutting upstream
 //    bandwidth and server load by >90%.
 // ============================================================================
 
 import {
-    PredictionData,
-    RankChart,
-    TierKLine,
     ServerType,
     RkTimelineResponse,
     RkKlineResponse,
     EventListItem,
 } from "@/types/prediction";
 import { RealtimeRankingRegion } from "@/types/realtime-ranking";
-import { calculateEventPrediction } from "@/lib/prediction-engine";
 
 export interface TierScoreSnapshot {
     rank: number;
@@ -213,112 +210,4 @@ export function extractTierScoresFromEntries(
         };
     }
     return result;
-}
-
-// ----------------------------------------------------------------------------
-// Prediction Model Incremental Update
-// ----------------------------------------------------------------------------
-
-/**
- * Merges a LiveRankingSyncPayload into an existing PredictionData instance.
- * Updates current scores and recalculates Bayesian-Kalman predictions in-memory.
- */
-export function applyLiveSyncToPrediction(
-    currentData: PredictionData,
-    syncPayload: LiveRankingSyncPayload,
-    server: ServerType,
-    eventStartAt?: number,
-    eventEndAt?: number,
-    eventType?: string,
-    bonusPercent?: number,
-): PredictionData {
-    if (!currentData || !currentData.data || !Array.isArray(currentData.data.charts)) {
-        return currentData;
-    }
-    if (syncPayload.eventId && currentData.data.event_id && syncPayload.eventId !== currentData.data.event_id) {
-        return currentData;
-    }
-
-    const updatedCharts: RankChart[] = currentData.data.charts.map((chart) => {
-        const tierUpdate = syncPayload.tierScores[chart.Rank];
-        if (!tierUpdate) return chart;
-
-        const newScore = tierUpdate.score;
-        const syncIsoTime = new Date(syncPayload.updatedAt).toISOString();
-
-        // Update history points
-        let nextHistory = [...chart.HistoryPoints];
-        if (nextHistory.length > 0) {
-            const lastPoint = nextHistory[nextHistory.length - 1];
-            const lastTimeMs = new Date(lastPoint.t).getTime();
-            // If the latest point is within 60s of the sync time, update it in place; otherwise append
-            if (Math.abs(syncPayload.updatedAt - lastTimeMs) < 60_000) {
-                nextHistory[nextHistory.length - 1] = { t: syncIsoTime, y: newScore };
-            } else if (syncPayload.updatedAt > lastTimeMs) {
-                nextHistory.push({ t: syncIsoTime, y: newScore });
-            }
-        } else {
-            nextHistory = [{ t: syncIsoTime, y: newScore }];
-        }
-
-        // Fast in-memory Bayesian-Kalman prediction calculation
-        let predictedScore = chart.PredictedScore;
-        let predictedScoreP10 = chart.PredictedScoreP10;
-        let predictedScoreP90 = chart.PredictedScoreP90;
-        let predictPoints = chart.PredictPoints;
-
-        const startAt = eventStartAt || (nextHistory.length > 0 ? new Date(nextHistory[0].t).getTime() : 0);
-        const endAt = eventEndAt || (startAt > 0 ? startAt + (9 * 24 * 3600000) : 0);
-
-        if (startAt > 0 && endAt > startAt && nextHistory.length > 0 && chart.Rank <= 10000) {
-            const engineResult = calculateEventPrediction({
-                server,
-                rank: chart.Rank,
-                startAt,
-                endAt,
-                historyPoints: nextHistory,
-                eventType,
-                bonusPercent,
-            });
-
-            predictedScore = engineResult.predictedScore;
-            predictedScoreP10 = engineResult.predictedScoreP10;
-            predictedScoreP90 = engineResult.predictedScoreP90;
-            predictPoints = engineResult.predictPoints;
-        }
-
-        return {
-            ...chart,
-            CurrentScore: newScore,
-            PredictedScore: predictedScore,
-            PredictedScoreP10: predictedScoreP10,
-            PredictedScoreP90: predictedScoreP90,
-            HistoryPoints: nextHistory,
-            PredictPoints: predictPoints,
-        };
-    });
-
-    const elapsedHours = eventStartAt ? Math.max(0.1, (syncPayload.updatedAt - eventStartAt) / 3600000) : 1;
-    const existingTierKlines = currentData.data.tier_klines || [];
-    const updatedTierKlines: TierKLine[] = updatedCharts.map((chart) => {
-        const existing = existingTierKlines.find(t => t.Rank === chart.Rank);
-        const speed = existing?.Speed ?? (elapsedHours > 0 ? Math.round(chart.CurrentScore / elapsedHours) : 0);
-        return {
-            Rank: chart.Rank,
-            Data: existing?.Data || [],
-            CurrentIndex: chart.CurrentScore,
-            Speed: speed,
-            ChangePct: existing?.ChangePct ?? 0,
-        };
-    });
-
-    return {
-        ...currentData,
-        timestamp: syncPayload.updatedAt,
-        data: {
-            ...currentData.data,
-            charts: updatedCharts,
-            tier_klines: updatedTierKlines,
-        },
-    };
 }

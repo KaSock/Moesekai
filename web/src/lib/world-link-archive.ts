@@ -43,8 +43,12 @@ export async function fetchWorldLinkArchive(
             const cached = window.localStorage.getItem(key);
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed?.snapshot && Array.isArray(parsed.snapshot.groups) && parsed.snapshot.groups.length > 0) {
-                    return parsed.snapshot;
+                const snapshot = parsed?.snapshot;
+                // Older builds could save the running event's snapshot under another event's key; skip it so the
+                // static archive is still tried.
+                const sameEvent = !snapshot?.eventId || snapshot.eventId === eventId;
+                if (snapshot && sameEvent && Array.isArray(snapshot.groups) && snapshot.groups.length > 0) {
+                    return snapshot;
                 }
             }
         } catch {

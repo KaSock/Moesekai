@@ -38,6 +38,7 @@ export const zhTWLayout = {
             live: "演唱會",
             prediction: "活動預測",
             predictionNext: "活動預測 Next",
+            predictionPlanner: "衝榜規劃器",
             realtimeRanking: "即時排行榜 Legacy",
             realtimeRankingNext: "即時排行榜 Next",
             mysekaiPreview: "烤森百景",
