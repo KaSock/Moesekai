@@ -54,8 +54,6 @@ const NOTE_KEYS: Record<string, string> = {
     cnWl1: "page.predictionPlanner.rules.notes.cnWl1",
 };
 
-const HOUR_MS = 3_600_000;
-
 /** Accepts both a bare id and the full i18n key, since EventRules documents the full-key form. */
 function lookupKey(map: Record<string, string>, raw: string): string {
     const bare = raw.slice(raw.lastIndexOf(".") + 1);
@@ -153,42 +151,8 @@ export default function RulesCard({ rules, overrides, onOverridesChange, scope, 
     const offText = t("page.predictionPlanner.rules.controls.off");
     const percent = (value: number) => t("page.predictionPlanner.rules.values.percent", { value: formatNumber(value) });
 
-    const turnLabel = rules.wlTurn ?? "?";
-    const scopeChapter = scope.kind === "chapter"
-        ? rules.chapters.find((c) => c.gameCharacterId === scope.gameCharacterId) ?? null
-        : null;
-    const scopeHours = scopeChapter
-        ? scopeChapter.hours
-        : Math.round((rules.scopeAggregateAt - rules.scopeStartAt) / HOUR_MS);
-    const finaleHours = rules.chapters[0]?.hours ?? Math.round((rules.aggregateAt - rules.startAt) / HOUR_MS);
     const specialMeasure = rules.auto.value.specialMeasure;
     const gaugeOn = rules.breakGauge.value !== null;
-
-    const summaryParts: string[] = [];
-    switch (rules.group) {
-        case "normal":
-            summaryParts.push(t("page.predictionPlanner.rules.summary.normal", {
-                days: formatNumber((rules.aggregateAt - rules.startAt) / (24 * HOUR_MS), { maximumFractionDigits: 1 }),
-            }));
-            break;
-        case "wl_finale":
-            summaryParts.push(t("page.predictionPlanner.rules.summary.wlFinale", { turn: turnLabel, hours: finaleHours }));
-            break;
-        case "wl_overall":
-            summaryParts.push(t("page.predictionPlanner.rules.summary.wlOverall", { turn: turnLabel, chapters: rules.chapters.length }));
-            break;
-        default:
-            summaryParts.push(t("page.predictionPlanner.rules.summary.wlChapter", { turn: turnLabel, hours: scopeHours }));
-    }
-    if (rules.group !== "normal" && rules.wlTurn === null) {
-        summaryParts.push(t("page.predictionPlanner.rules.summary.unknownTurn"));
-    }
-    summaryParts.push(gaugeOn ? t("page.predictionPlanner.rules.summary.gaugeOn") : t("page.predictionPlanner.rules.summary.gaugeOff"));
-    if (rules.isFinale || specialMeasure) {
-        summaryParts.push(specialMeasure
-            ? t("page.predictionPlanner.rules.summary.autoMeasureOn")
-            : t("page.predictionPlanner.rules.summary.autoMeasureOff"));
-    }
 
     const patchOverrides = (patch: Partial<RuleOverrides>) => {
         onOverridesChange({ ...overrides, ...patch });
@@ -239,15 +203,10 @@ export default function RulesCard({ rules, overrides, onOverridesChange, scope, 
 
     return (
         <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
-                        {t("page.predictionPlanner.rules.title")}
-                    </h2>
-                    <p className="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 break-words">
-                        {summaryParts.join(" · ")}
-                    </p>
-                </div>
+            <div className="flex items-center justify-between gap-3">
+                <h2 className="min-w-0 text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                    {t("page.predictionPlanner.rules.title")}
+                </h2>
                 <button
                     type="button"
                     onClick={() => setExpanded((v) => !v)}

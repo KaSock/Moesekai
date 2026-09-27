@@ -161,6 +161,14 @@ body {
   line-height: var(--type-leading-body);
 }
 
+/* Stops the macOS trackpad bounce past the top and bottom of the page; touch devices keep pull-to-refresh. */
+@media (hover: hover) and (pointer: fine) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 :root.theme-switching,
 :root.theme-switching *,
 :root.theme-switching *::before,

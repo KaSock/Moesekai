@@ -93,7 +93,9 @@ const CHIP_CLASS = "flex-1 min-w-0 max-w-16 sm:flex-none px-1 sm:px-2.5 py-1.5 s
 const CHIP_ON = "bg-miku/20 text-miku font-bold border border-miku/40";
 const CHIP_OFF = "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-transparent hover:text-slate-700 dark:hover:text-slate-200";
 
-const HOUR_CHIPS = [2, 4, 6, 8, 12];
+const HOUR_CHIPS = [2, 4, 6, 8, 12, 16, 24];
+/** Seven hour chips wrap to two rows of four in the half-width phone column. */
+const HOUR_CHIP_ROW_CLASS = "mt-1.5 grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap";
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -224,7 +226,7 @@ export default function TargetPanel({
 
                     {value.targetTier != null ? (
                         value.targetScore > 0 && (
-                            <p className="mt-2 text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                            <p className="mt-2 text-xs font-bold tabular-nums text-amber-600 dark:text-amber-400">
                                 {t("page.predictionPlanner.target.predictedFinal", { score: formatNumber(value.targetScore) })}
                             </p>
                         )
@@ -286,7 +288,7 @@ export default function TargetPanel({
                                 {t("page.predictionPlanner.time.hoursUnit")}
                             </span>
                         </div>
-                        <div className={CHIP_ROW_CLASS}>
+                        <div className={HOUR_CHIP_ROW_CLASS}>
                             {HOUR_CHIPS.map((hours) => (
                                 <button
                                     key={hours}

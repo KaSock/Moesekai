@@ -59,6 +59,8 @@ const TILE = "p-3.5 rounded-xl border min-w-0";
 const NEUTRAL_TILE = "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-800";
 const TILE_LABEL = "block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1";
 const TILE_VALUE = "block text-base sm:text-lg font-black font-mono break-words";
+/** Values that mix CJK text with numbers read better in the body font. */
+const TILE_TEXT_VALUE = "block text-base sm:text-lg font-black tabular-nums break-words";
 const TILE_SUB = "block mt-1 text-xs text-slate-500 dark:text-slate-400 break-words";
 
 export default function ResultsPanel({ result, comparison, rules }: ResultsPanelProps) {
@@ -184,7 +186,7 @@ export default function ResultsPanel({ result, comparison, rules }: ResultsPanel
                                 <span className={TILE_LABEL}>
                                     {underDay ? t("page.predictionPlanner.results.manualNeeded") : t("page.predictionPlanner.results.dailyManual")}
                                 </span>
-                                <span className={`${TILE_VALUE} ${style.value}`}>
+                                <span className={`${TILE_TEXT_VALUE} ${style.value}`}>
                                     {underDay
                                         ? t("page.predictionPlanner.results.manualNeededValue", {
                                             total: hours(result.manualHoursTotal),
@@ -224,7 +226,7 @@ export default function ResultsPanel({ result, comparison, rules }: ResultsPanel
                         {!reached && (
                             <div className={`${TILE} ${NEUTRAL_TILE} sm:col-span-2`}>
                                 <span className={TILE_LABEL}>{t("page.predictionPlanner.results.stamina")}</span>
-                                <span className={`${TILE_VALUE} text-amber-600 dark:text-amber-400`}>
+                                <span className={`${TILE_TEXT_VALUE} text-amber-600 dark:text-amber-400`}>
                                     {t("page.predictionPlanner.results.staminaValue", {
                                         stamina: formatNumber(result.stamina),
                                         drinks: formatNumber(result.bigDrinks),

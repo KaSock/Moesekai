@@ -2288,21 +2288,10 @@ export const enUSMessages = {
                 title: "This event's rules",
                 expand: "Show rules",
                 collapse: "Hide",
-                summary: {
-                    normal: "Normal event · {days} days",
-                    wlChapter: "WL{turn} chapter · {hours} h",
-                    wlOverall: "WL{turn} overall · {chapters} chapters",
-                    wlFinale: "WL{turn} finale · {hours} h",
-                    unknownTurn: "Unknown edition",
-                    gaugeOn: "Refresh gauge on",
-                    gaugeOff: "No refresh gauge",
-                    autoMeasureOn: "Auto special measure",
-                    autoMeasureOff: "No Auto special measure",
-                },
                 source: {
                     masterdata: "Game data",
                     official: "Official notice",
-                    secondary: "Secondary source",
+                    secondary: "External source",
                     user: "Your change",
                 },
                 items: {
@@ -2384,6 +2373,8 @@ export const enUSMessages = {
                 customRoom: "Custom room (PT is about {percent}% of normal Multi Live)",
                 gapSeconds: "Gap between plays (s)",
                 autoLowerBound: "Lower-bound estimate",
+                sectionExpand: "Show",
+                sectionCollapse: "Hide",
                 deck: {
                     needAccount: "Link an account on the Deck Recommender page first",
                     goToDeck: "Link account",

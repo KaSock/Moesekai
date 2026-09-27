@@ -250,8 +250,8 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
     const [musicChoice, setMusicChoice] = useState<number | null>(null);
     const [difficultyChoice, setDifficultyChoice] = useState("master");
     const [search, setSearch] = useState("");
-    const [fire, setFire] = useState(value?.manualFire ?? 10);
-    const [autoFireChoice, setAutoFireChoice] = useState(value?.autoFire ?? 10);
+    const [fire, setFire] = useState(value?.manualFire ?? 5);
+    const [autoFireChoice, setAutoFireChoice] = useState(value?.autoFire ?? 5);
     const [customRoom, setCustomRoom] = useState(false);
     const [gapInput, setGapInput] = useState("");
 
@@ -616,6 +616,36 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
     const liveOptions: PlannerLiveType[] = [coopLive, "solo"];
     const fireOptions = FIRE_MULTIPLIERS.map((m, count) => ({ count, m }));
 
+    // Rendered right under the calculate row of the deck and manual modes.
+    const statTiles = mode !== "direct" && plan ? (
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 transition-opacity ${gainsPending ? "opacity-60" : ""}`}>
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 min-w-0">
+                <span className="text-[11px] font-bold text-slate-400 block mb-0.5">{t("page.predictionPlanner.pt.direct.manualPt")}</span>
+                <span className="text-base font-black font-mono text-slate-800 dark:text-slate-100">{formatNumber(plan.manualPtPerPlay)}</span>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 min-w-0">
+                <span className="text-[11px] font-bold text-slate-400 block mb-0.5">{t("page.predictionPlanner.pt.direct.playsPerHour")}</span>
+                <span className="text-base font-black font-mono text-slate-800 dark:text-slate-100">{formatNumber(plan.playsPerHour, { maximumFractionDigits: 1 })}</span>
+            </div>
+            <div className="col-span-2 sm:col-span-1 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 min-w-0">
+                <span className="text-[11px] font-bold text-slate-400 flex flex-wrap items-center gap-1.5 mb-0.5">
+                    <span>{t("page.predictionPlanner.pt.direct.autoPt")}</span>
+                    {plan.autoIsLowerBound && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-[10px] leading-none">
+                            {t("page.predictionPlanner.pt.autoLowerBound")}
+                        </span>
+                    )}
+                </span>
+                <span className="text-base font-black font-mono text-slate-800 dark:text-slate-100">{formatNumber(plan.autoPtPerPlay)}</span>
+                {autoSongLabel && (
+                    <span className="block text-[10px] text-slate-400 truncate" title={autoSongLabel}>
+                        {t("page.predictionPlanner.pt.live.auto")} · {autoSongLabel}
+                    </span>
+                )}
+            </div>
+        </div>
+    ) : null;
+
     return (
         <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -823,6 +853,8 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
                         </>
                     )}
 
+                    {statTiles}
+
                     {hasEngineGap && (
                         <div className="space-y-2">
                             <p className="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 text-xs break-words">
@@ -863,6 +895,7 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
                             {t("page.predictionPlanner.pt.manual.calculate")}
                         </button>
                     </div>
+                    {statTiles}
                 </div>
             )}
 
@@ -888,35 +921,6 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
                         </li>
                     ))}
                 </ul>
-            )}
-
-            {mode !== "direct" && plan && (
-                <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 transition-opacity ${gainsPending ? "opacity-60" : ""}`}>
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 min-w-0">
-                        <span className="text-[11px] font-bold text-slate-400 block mb-0.5">{t("page.predictionPlanner.pt.direct.manualPt")}</span>
-                        <span className="text-base font-black font-mono text-slate-800 dark:text-slate-100">{formatNumber(plan.manualPtPerPlay)}</span>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 min-w-0">
-                        <span className="text-[11px] font-bold text-slate-400 block mb-0.5">{t("page.predictionPlanner.pt.direct.playsPerHour")}</span>
-                        <span className="text-base font-black font-mono text-slate-800 dark:text-slate-100">{formatNumber(plan.playsPerHour, { maximumFractionDigits: 1 })}</span>
-                    </div>
-                    <div className="col-span-2 sm:col-span-1 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 min-w-0">
-                        <span className="text-[11px] font-bold text-slate-400 flex flex-wrap items-center gap-1.5 mb-0.5">
-                            <span>{t("page.predictionPlanner.pt.direct.autoPt")}</span>
-                            {plan.autoIsLowerBound && (
-                                <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-[10px] leading-none">
-                                    {t("page.predictionPlanner.pt.autoLowerBound")}
-                                </span>
-                            )}
-                        </span>
-                        <span className="text-base font-black font-mono text-slate-800 dark:text-slate-100">{formatNumber(plan.autoPtPerPlay)}</span>
-                        {autoSongLabel && (
-                            <span className="block text-[10px] text-slate-400 truncate" title={autoSongLabel}>
-                                {t("page.predictionPlanner.pt.live.auto")} · {autoSongLabel}
-                            </span>
-                        )}
-                    </div>
-                </div>
             )}
 
             {mode !== "direct" && views.length > 0 && (

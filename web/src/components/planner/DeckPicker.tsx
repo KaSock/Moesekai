@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import SekaiCardThumbnail from "@/components/cards/SekaiCardThumbnail";
+import CollapsibleBlock from "./CollapsibleBlock";
 import { fetchMasterDataForServer } from "@/lib/fetch";
 import type { ICardInfo } from "@/types/types";
 import type { PlannerDeckOption } from "@/lib/deck-recommend/planner-types";
@@ -44,10 +45,7 @@ export default function DeckPicker({ options, selectedRank, onSelect }: DeckPick
     if (!hasOptions) return null;
 
     return (
-        <div>
-            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
-                {t("page.predictionPlanner.pt.deck.resultsTitle", { count: options.length })}
-            </h3>
+        <CollapsibleBlock title={t("page.predictionPlanner.pt.deck.resultsTitle", { count: options.length })}>
             <div role="radiogroup" className="space-y-2">
                 {options.map((option) => {
                     const selected = option.rank === selectedRank;
@@ -123,6 +121,6 @@ export default function DeckPicker({ options, selectedRank, onSelect }: DeckPick
                     );
                 })}
             </div>
-        </div>
+        </CollapsibleBlock>
     );
 }

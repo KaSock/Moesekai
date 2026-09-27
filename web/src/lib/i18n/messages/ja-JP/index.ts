@@ -2311,21 +2311,10 @@ export const jaJPMessages = {
         title: '今回のルール',
         expand: 'ルールを表示',
         collapse: '閉じる',
-        summary: {
-          normal: '通常イベント · {days}日間',
-          wlChapter: 'WL{turn} チャプター · {hours}時間',
-          wlOverall: 'WL{turn} 総合 · 全{chapters}チャプター',
-          wlFinale: 'WL{turn} フィナーレ · {hours}時間',
-          unknownTurn: '開催回不明',
-          gaugeOn: 'リフレッシュゲージあり',
-          gaugeOff: 'リフレッシュゲージなし',
-          autoMeasureOn: 'オートライブ特別措置あり',
-          autoMeasureOff: 'オートライブ特別措置なし',
-        },
         source: {
           masterdata: 'ゲームデータ',
           official: '公式お知らせ',
-          secondary: '二次情報',
+          secondary: '外部情報',
           user: '手動で変更',
         },
         items: {
@@ -2407,6 +2396,8 @@ export const jaJPMessages = {
         customRoom: 'カスタムルーム（PTは通常のみんなでライブの約{percent}%）',
         gapSeconds: 'プレイ間隔（秒）',
         autoLowerBound: '下限の見積もり',
+        sectionExpand: '開く',
+        sectionCollapse: '閉じる',
         deck: {
           needAccount: '先に編成レコメンドページでアカウントを連携してください',
           goToDeck: '連携する',

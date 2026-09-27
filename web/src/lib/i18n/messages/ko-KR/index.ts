@@ -2309,21 +2309,10 @@ export const koKRMessages = {
                 title: "이번 이벤트 규칙",
                 expand: "규칙 펼치기",
                 collapse: "접기",
-                summary: {
-                    normal: "일반 이벤트 · {days}일",
-                    wlChapter: "WL{turn} 챕터 · {hours}시간",
-                    wlOverall: "WL{turn} 종합 · {chapters}챕터",
-                    wlFinale: "WL{turn} 피날레 · {hours}시간",
-                    unknownTurn: "회차 불명",
-                    gaugeOn: "리프레시 게이지 있음",
-                    gaugeOff: "리프레시 게이지 없음",
-                    autoMeasureOn: "오토 특별 조치 있음",
-                    autoMeasureOff: "오토 특별 조치 없음",
-                },
                 source: {
                     masterdata: "게임 데이터",
                     official: "공식 공지",
-                    secondary: "2차 출처",
+                    secondary: "외부 출처",
                     user: "직접 변경",
                 },
                 items: {
@@ -2405,6 +2394,8 @@ export const koKRMessages = {
                 customRoom: "커스텀 룸 (PT는 일반 협력 라이브의 약 {percent}%)",
                 gapSeconds: "판 사이 간격(초)",
                 autoLowerBound: "하한 추정",
+                sectionExpand: "펼치기",
+                sectionCollapse: "접기",
                 deck: {
                     needAccount: "먼저 덱 추천 페이지에서 계정을 연동하세요",
                     goToDeck: "연동하러 가기",

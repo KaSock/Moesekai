@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
+import CollapsibleBlock from "./CollapsibleBlock";
 
 export interface SongGainView {
     key: string;
@@ -94,10 +95,7 @@ export default function SongGainTable({ rows, selectedKey, onUse, limit = 10 }: 
     };
 
     return (
-        <div>
-            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
-                {t("page.predictionPlanner.pt.songGain.title")}
-            </h3>
+        <CollapsibleBlock title={t("page.predictionPlanner.pt.songGain.title")}>
             <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
                 <table className="w-full table-fixed text-[11px]">
                     <thead className="bg-slate-50 dark:bg-slate-800/60">
@@ -156,6 +154,6 @@ export default function SongGainTable({ rows, selectedKey, onUse, limit = 10 }: 
                     </tbody>
                 </table>
             </div>
-        </div>
+        </CollapsibleBlock>
     );
 }
