@@ -9,8 +9,6 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY web/package.json web/package.json
 COPY refer/re_sekai-calculator/package.json refer/re_sekai-calculator/package.json
-# 组卡引擎是 file: 依赖（web/vendor/allium-deck-wasm），必须在 install 之前拷进来。
-COPY web/vendor/allium-deck-wasm/ web/vendor/allium-deck-wasm/
 RUN bun install --frozen-lockfile
 
 COPY web/ web/

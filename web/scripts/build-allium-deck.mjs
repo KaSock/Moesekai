@@ -210,8 +210,7 @@ function main() {
                 '它是 /wasm/ 产物唯一的缓存击穿键。',
         );
     }
-    // bun 把 file: 依赖整目录拷进 web/node_modules，不重装的话 copy:wasm 拿到的还是旧副本。
-    console.log('  下一步: bun install && bun run --cwd web copy:wasm');
+    console.log('  下一步: bun run --cwd web copy:wasm');
 }
 
 main();

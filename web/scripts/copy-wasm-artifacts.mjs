@@ -3,7 +3,8 @@
  *
  * 把 @empty-sekai/allium-deck-wasm 的产物拷贝到 public/wasm/，
  * 让浏览器在运行时直接从 /wasm/ 加载，而不经过打包器。
- * 默认取已安装的 npm 包；先 `npm install` 再跑本脚本。
+ * vendor/allium-deck-wasm/ 里有打过补丁的构建时用它（见该目录 README），
+ * 否则取已安装的 npm 包（先 `npm install`）。
  *
  * ALLIUM_DECK_WASM_DIR 可指向本地 `wasm-pack build wasm --target web` 的产物目录
  * （形如 <allium-deck>/wasm/pkg），用来联调尚未发版的引擎改动——否则每次
@@ -32,6 +33,7 @@ const ARTIFACTS = [
     ['allium_deck_bg.wasm', 'allium-deck_bg.wasm'],
 ];
 
+const VENDOR_DIR = path.join(webRoot, 'vendor', 'allium-deck-wasm');
 const OUT_DIR = path.join(webRoot, 'public', 'wasm');
 const VERSION_FILE = path.join(webRoot, 'src', 'lib', 'deck-engine', 'wasm-version.ts');
 
@@ -44,6 +46,9 @@ function resolvePackageDir() {
             throw new Error(`ALLIUM_DECK_WASM_DIR 里没有 allium_deck.js: ${dir}`);
         }
         return dir;
+    }
+    if (fs.existsSync(path.join(VENDOR_DIR, 'allium_deck.js'))) {
+        return VENDOR_DIR;
     }
     // workspaces 会把依赖提升到仓库根 node_modules，所以用 require.resolve 而不是拼路径。
     const require = createRequire(import.meta.url);
@@ -90,7 +95,11 @@ function main() {
         'utf8',
     );
 
-    const source = process.env.ALLIUM_DECK_WASM_DIR ? `本地构建 ${packageDir}` : PACKAGE_NAME;
+    const source = process.env.ALLIUM_DECK_WASM_DIR
+        ? `本地构建 ${packageDir}`
+        : packageDir === VENDOR_DIR
+          ? `vendor/allium-deck-wasm`
+          : PACKAGE_NAME;
     console.log(
         `[copy-wasm] ${source}@${pkg.version} → public/wasm/ (${ARTIFACTS.map(([, out]) => out).join(', ')})`,
     );

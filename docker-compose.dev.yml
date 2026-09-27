@@ -37,8 +37,6 @@ services:
       - ./web:/app/web
       - ./refer/re_sekai-calculator:/app/refer/re_sekai-calculator:ro
       - /app/node_modules
-      # file: 依赖装在 web/node_modules，不挂匿名卷会被上面的 ./web 绑定挂载遮住。
-      - /app/web/node_modules
     ports:
       - "3000:3000"
     depends_on:

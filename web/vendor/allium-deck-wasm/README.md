@@ -1,6 +1,6 @@
 # @empty-sekai/allium-deck-wasm（Moesekai vendor 构建）
 
-组卡页（deck-recommend / 控分组卡）用的 allium-deck wasm 引擎。上游 npm 0.0.14 把 JP #218（WL3 终章）按普通章节计算，上游发布修复之前，站点改用这里的本地构建：`web/package.json` 以 `file:./vendor/allium-deck-wasm` 依赖本目录，包名不变，`copy:wasm` 照常把产物拷到 `public/wasm/`。
+组卡页（deck-recommend / 控分组卡）用的 allium-deck wasm 引擎。上游 npm 0.0.14 把 JP #218（WL3 终章）按普通章节计算，上游发布修复之前，站点改用这里的本地构建：`copy:wasm`（`web/scripts/copy-wasm-artifacts.mjs`）发现本目录有 `allium_deck.js` 时直接从这里把产物拷到 `public/wasm/`，版本号取本目录的 `package.json`。`web/package.json` 仍依赖 npm 0.0.14，只在本目录不存在时作为回退来源；依赖、`bun.lock` 与 Dockerfile 都不需要改。
 
 ## 基线
 
@@ -29,11 +29,10 @@
 ```sh
 # 引擎 checkout 必须在本仓库之外；目录不存在时脚本会从上游 clone v0.0.14
 node web/scripts/build-allium-deck.mjs /path/to/allium-deck
-bun install
 bun run --cwd web copy:wasm
 ```
 
-脚本在 checkout 旁新建 worktree（`ALLIUM_DECK_BUILD_DIR`，默认 `<checkout>-moesekai-build`），从 v0.0.14 开始打 `patches/` 里的补丁，然后构建，覆盖本目录的 `allium_deck.js`、`allium_deck_bg.wasm`、`allium_deck.d.ts`，并打印所用工具版本。checkout 本身的 HEAD 和工作区不动。bun 会把 `file:` 依赖整目录拷进 `web/node_modules`，所以产物变了必须重新 `bun install`，`copy:wasm` 才会拿到新文件。
+脚本在 checkout 旁新建 worktree（`ALLIUM_DECK_BUILD_DIR`，默认 `<checkout>-moesekai-build`），从 v0.0.14 开始打 `patches/` 里的补丁，然后构建，覆盖本目录的 `allium_deck.js`、`allium_deck_bg.wasm`、`allium_deck.d.ts`，并打印所用工具版本。checkout 本身的 HEAD 和工作区不动。
 
 改补丁时，在引擎仓库基于 `v0.0.14` 提交修改，然后先清空 `patches/` 再导出。脚本按文件名顺序打上目录里所有 `*.patch`，残留的旧补丁也会被打上（通常让 `git am` 失败）；`-o` 必须写站点仓库的绝对路径，相对路径会落到引擎仓库里：
 
@@ -48,6 +47,6 @@ git -C /path/to/allium-deck format-patch v0.0.14..HEAD -o /path/to/Moesekai/web/
 
 上游发布同时包含上面 6 条修复的版本后（只修了 #218 而没修第 5、6 条的版本不能用，否则终章的固定卡/固定角色会再次静默失效，或首个固定项又被强制当队长）：
 
-1. `web/package.json` 改回 `"@empty-sekai/allium-deck-wasm": "<新版本>"`；
-2. 删除 `web/vendor/allium-deck-wasm/` 和 `web/scripts/build-allium-deck.mjs`，并去掉 `Dockerfile` 与 `web/Dockerfile.dev` 里拷贝 vendor 目录的那一行；
-3. `bun install` 更新 `bun.lock`，再跑 `bun run --cwd web copy:wasm`。
+1. `web/package.json` 改成 `"@empty-sekai/allium-deck-wasm": "<新版本>"`，`bun install` 更新 `bun.lock`；
+2. 删除 `web/vendor/allium-deck-wasm/` 和 `web/scripts/build-allium-deck.mjs`（`copy:wasm` 找不到本目录就会改用 npm 包）；
+3. 再跑 `bun run --cwd web copy:wasm`。
