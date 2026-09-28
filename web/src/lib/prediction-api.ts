@@ -171,7 +171,20 @@ export async function fetchPredictionLatest(eventId: number, server: ServerType)
     });
 }
 
-async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: number): Promise<PredictionData> {
+// rk writes kline buckets in Beijing wall-clock time but suffixes them with Z; its timeline endpoint gives the
+// same hours as +08:00.
+function mapGlobalKline(klineData: RkKlineResponse | null): KLinePoint[] {
+    return (klineData?.klines ?? []).map(k => ({
+        t: k.time_bucket.replace(/Z$/, '+08:00'),
+        o: k.open,
+        c: k.close,
+        l: k.low,
+        h: k.high,
+        v: k.volume,
+    }));
+}
+
+async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: number, globalKline: KLinePoint[] = []): Promise<PredictionData> {
     const livePromise = loadLivePrediction();
     const latestSnapshot = await fetchLatestV2(server);
     // v2 serves only the region's running event; another event's tiers must not be shown under this one.
@@ -297,7 +310,7 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
             event_id: eventId,
             event_name: eventMeta?.name || '',
             charts,
-            global_kline: [],
+            global_kline: globalKline,
             tier_klines,
         },
     };
@@ -315,6 +328,7 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
             (live) => live.awaitContextSource(server, eventId),
             () => null,
         );
+        let globalKline: KLinePoint[] = [];
         try {
             // Check SWR caches for heavy timeline and kline data
             const cachedTimeline = getCachedTimeline(server, eventId);
@@ -333,11 +347,21 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
             clearTimeout(timeoutId);
 
             const latest: RkLatestResponse | null = latestRes.ok ? await latestRes.json() : null;
+
+            let klineData: RkKlineResponse | null = null;
+            if (cachedKline !== undefined) {
+                klineData = cachedKline;
+            } else if (klineRes && klineRes.ok) {
+                klineData = await klineRes.json();
+                setCachedKline(server, eventId, klineData);
+            }
+            globalKline = mapGlobalKline(klineData);
+
             // rk can list a running event without any tiers (JP #218); the v2 snapshot of the same event fills in.
             // A running event whose v2 load fails goes to the fallback below and rejects if that fails too, so the
             // page reports the failure and its poll retries; other events keep their empty rk result.
             if (latest && !(Array.isArray(latest.items) && latest.items.length > 0)) {
-                const realtime = await buildPredictionDataFromRealtimeV2(server, eventId).catch((err: unknown) => {
+                const realtime = await buildPredictionDataFromRealtimeV2(server, eventId, globalKline).catch((err: unknown) => {
                     if (latest.status === 'active') throw err;
                     return null;
                 });
@@ -362,14 +386,6 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                     };
                 }
 
-                let klineData: RkKlineResponse | null = null;
-                if (cachedKline !== undefined) {
-                    klineData = cachedKline;
-                } else if (klineRes && klineRes.ok) {
-                    klineData = await klineRes.json();
-                    setCachedKline(server, eventId, klineData);
-                }
-
                 const isActive = latest.status === 'active';
                 const updatedAt = new Date(latest.updated_at).getTime();
 
@@ -381,16 +397,6 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                     tierScores: extractTierScoresFromEntries(latest.items),
                     source: 'prediction',
                 });
-
-                // ── Map global kline ────────────────────────────────────────────────────
-                const global_kline: KLinePoint[] = (klineData?.klines ?? []).map(k => ({
-                    t: k.time_bucket,
-                    o: k.open,
-                    c: k.close,
-                    l: k.low,
-                    h: k.high,
-                    v: k.volume,
-                }));
 
                 // ── Build per-rank history from timeline ────────────────────────────────
                 const historyByRank = new Map<number, { t: string; score: number; prediction: number | null }[]>();
@@ -536,7 +542,7 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                         event_id: eventId,
                         event_name: '',
                         charts,
-                        global_kline,
+                        global_kline: globalKline,
                         tier_klines,
                     },
                 };
@@ -546,6 +552,6 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
         }
 
         // Fallback to Realtime Ranking V2 snapshot
-        return buildPredictionDataFromRealtimeV2(server, eventId);
+        return buildPredictionDataFromRealtimeV2(server, eventId, globalKline);
     });
 }

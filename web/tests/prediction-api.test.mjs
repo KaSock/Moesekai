@@ -1,6 +1,6 @@
 /**
  * 预测页的数据与走势图：prediction-api.ts（fetchPredictionData 的 rk 与 v2 两条路径）、
- * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行），以及 PredictionChart 的预测显示开关。
+ * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行），以及 PredictionChart 的预测显示开关与 PGAIChart 的空数据显示。
  * Run with: node --test --experimental-strip-types tests/prediction-api.test.mjs
  * 规则与主数据来自 tests/fixtures/event-rules（W6 的 masterdata 夹具），模型参数为提交的 priors.json；
  * 上游（rk、rks-n v2、metadata）全部用桩替换。
@@ -16,9 +16,10 @@ import ts from "typescript";
 const SRC_ROOT = fileURLToPath(new URL("../src/", import.meta.url));
 const SRC_URL = pathToFileURL(SRC_ROOT).href;
 const CHART_URL = pathToFileURL(resolvePath(SRC_ROOT, "components/events/PredictionChart.tsx")).href;
+const PGAI_URL = pathToFileURL(resolvePath(SRC_ROOT, "components/events/PGAIChart.tsx")).href;
 
 // 与 prediction-engine.test.mjs 相同的加载钩子：@/ 别名与无扩展名导入按 tsconfig 解析，src 下的 .ts 用 TypeScript
-// 转译，不带 type 属性的 JSON 导入转成 ES 模块。.tsx 里只有 PredictionChart 按 JSX 转译，其余给空模块；
+// 转译，不带 type 属性的 JSON 导入转成 ES 模块。.tsx 里只有 PredictionChart 与 PGAIChart 按 JSX 转译，其余给空模块；
 // 两个 React context 和 echarts-for-react 换成最小实现（后者记下传给图表的 option，供断言）。
 const STUBS = {
   "@/contexts/I18nContext": "const t = (key) => key; const formatNumber = (n) => String(n); const api = { t, formatNumber }; export function useI18n() { return api; }",
@@ -47,7 +48,7 @@ registerHooks({
       });
       return { format: "module", source: outputText, shortCircuit: true };
     };
-    if (url === CHART_URL) return transpile(true);
+    if (url === CHART_URL || url === PGAI_URL) return transpile(true);
     if (url.startsWith("file:") && url.endsWith(".tsx")) return { format: "module", source: "export {};", shortCircuit: true };
     if (url.startsWith(SRC_URL) && url.endsWith(".ts")) return transpile(false);
     if (url.startsWith("file:") && url.endsWith(".json") && !url.includes("/node_modules/") && context.importAttributes?.type !== "json") {
@@ -387,4 +388,69 @@ test("only /prediction-next opts in to the prediction above T10000; /prediction 
   const uses = (text) => [...text.matchAll(/<PredictionChart\b[^>]*\/>/g)].map((m) => m[0]);
   assert.deepEqual(uses(src("prediction-next/client.tsx")).map((u) => /\bshowPredictionAtAllRanks\b/.test(u)), [true]);
   assert.deepEqual(uses(src("prediction/client.tsx")).map((u) => /\bshowPredictionAtAllRanks\b/.test(u)), [false]);
+});
+
+// ---------------------------------------------------------------------------
+// PGAI：K 线的时间与空数据显示
+// ---------------------------------------------------------------------------
+
+// rk 的 kline 桶是北京时间的整点却带 Z：2026-09-28T10:48Z（北京 18:48）时两服的最后一桶都是 "2026-09-28T18:00:00Z"，
+// 同一时刻国服 timeline 的最后一帧是 "2026-09-28T18:00:00+08:00"。数值取自日服 #218 当时的最后两桶。
+const RK_KLINES = [
+  { time_bucket: "2026-09-28T17:00:00Z", open: 9093, high: 12708, low: 8803, close: 10807, volume: 71_998_944 },
+  { time_bucket: "2026-09-28T18:00:00Z", open: 10398, high: 11100, low: 8743, close: 8882, volume: 44_219_004 },
+];
+const KLINE_HOURS_UTC = ["2026-09-28T09:00:00.000Z", "2026-09-28T10:00:00.000Z"];
+const klineHours = (data) => data.data.global_kline.map((k) => new Date(k.t).toISOString());
+
+test("PGAI kline on the rk path: Beijing-hour buckets become the right instants, OHLC unchanged", async () => {
+  const rules = rulesOf("jp", 217);
+  const collect = new Date(rules.scopeStartAt + 30 * HOUR).toISOString();
+  const items = [100, 1000].map((rank) => ({ rank, score: 50_000_000 / rank, prediction: null, collect_time: collect, is_final: false }));
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/217\/latest/, json({ event_id: 217, status: "active", updated_at: collect, items })],
+    [/rk\.exmeaning\.com\/public\/event\/217\/timeline/, json({ event_id: 217, status: "active", granularity: 1, final_only: false, timeline: [] })],
+    [/rk\.exmeaning\.com\/public\/event\/217\/kline/, json({ event_id: 217, status: "active", klines: RK_KLINES, tier_speeds: [] })],
+  ]);
+  const data = await api.fetchPredictionData(217, "jp");
+  assert.deepEqual(klineHours(data), KLINE_HOURS_UTC);
+  assert.deepEqual(data.data.global_kline.map((k) => [k.o, k.h, k.l, k.c]), RK_KLINES.map((k) => [k.open, k.high, k.low, k.close]));
+});
+
+test("PGAI kline on the v2 fallback (rk lists #218 without tiers): the chart still gets rk's kline", async () => {
+  const updatedAt = JP_218_START + 70 * HOUR;
+  const rankings = Array.from({ length: 100 }, (_, i) => ({ rank: i + 1, score: jp218ScoreAt(i + 1), userId: String(i + 1), name: "p" }));
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/218\/latest/, json({ event_id: 218, status: "active", items: [] })],
+    [/rk\.exmeaning\.com\/public\/event\/218\/kline/, json({ event_id: 218, status: "active", klines: RK_KLINES, tier_speeds: [] })],
+    [/rk\.exmeaning\.com\/public\/event\/218\//, json({ event_id: 218, status: "active", granularity: 0, final_only: false, timeline: [] })],
+    [/\/v2\/jp\/latest/, json({ event_id: 218, region: "jp", start_at: JP_218_START, end_at: JP_218_END, updated_at: updatedAt, is_event_aggregate: false, rankings })],
+    [/\/v2\/jp\/tier-series/, json({ error: "origin error" }, 522)],
+  ]);
+  const data = await api.fetchPredictionData(218, "jp");
+  assert.ok(data.data.charts.length > 0, "the v2 snapshot supplied the rows");
+  assert.deepEqual(klineHours(data), KLINE_HOURS_UTC);
+});
+
+test("PGAIChart: without kline data it shows a dash and no change; with data, the last close and its change", async () => {
+  const React = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { default: PGAIChart } = await import("../src/components/events/PGAIChart.tsx");
+  const render = (globalKline) => {
+    globalThis.__predictionChartOption = null;
+    const html = renderToStaticMarkup(React.createElement(PGAIChart, { globalKline }));
+    return { html, option: globalThis.__predictionChartOption };
+  };
+
+  const empty = render([]);
+  assert.ok(empty.html.includes("—"), empty.html);
+  assert.ok(!/[▲▼]|\d%/.test(empty.html), `no change figure without data: ${empty.html}`);
+  assert.equal(empty.option.title.text, "page.prediction.pgai.noKlineData");
+
+  const points = RK_KLINES.map((k) => ({ t: k.time_bucket.replace(/Z$/, "+08:00"), o: k.open, c: k.close, l: k.low, h: k.high, v: k.volume }));
+  const full = render(points);
+  assert.ok(full.html.includes(">8882<"), full.html);
+  // (8882 - 10807) / 10807 = -17.81 %
+  assert.ok(full.html.includes("▼") && full.html.includes("17.81%"), full.html);
+  assert.equal(full.option.series[0].data.length, 2);
 });

@@ -15,6 +15,7 @@ interface TooltipParam {
 
 export default function PGAIChart({ globalKline, height: _height = 300 }: PGAIChartProps) {
     const { t, formatNumber } = useI18n();
+    const hasData = globalKline.length > 0;
     const latestPoint = globalKline[globalKline.length - 1];
     const prevPoint = globalKline[globalKline.length - 2];
 
@@ -25,7 +26,14 @@ export default function PGAIChart({ globalKline, height: _height = 300 }: PGAICh
 
     const option = useMemo(() => {
         if (!globalKline || globalKline.length === 0) {
-            return { title: { text: t("page.prediction.pgai.noKlineData"), left: 'center', top: 'center' } };
+            return {
+                title: {
+                    text: t("page.prediction.pgai.noKlineData"),
+                    left: 'center',
+                    top: 'center',
+                    textStyle: { color: '#94a3b8', fontSize: 14, fontWeight: 'normal' },
+                },
+            };
         }
 
         const times = globalKline.map(p => {
@@ -151,7 +159,7 @@ export default function PGAIChart({ globalKline, height: _height = 300 }: PGAICh
 
     return (
         <div className="bg-white rounded-xl border border-slate-100 p-6 h-full flex flex-col">
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start gap-4 mb-6">
                 <div>
                     <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
                         {t("page.prediction.pgai.title")}
@@ -159,15 +167,19 @@ export default function PGAIChart({ globalKline, height: _height = 300 }: PGAICh
                     </h3>
                     <p className="text-xs text-slate-400 mt-1">{t("page.prediction.pgai.subtitle")}</p>
                 </div>
-                <div className="text-right">
-                    <div className={`text-4xl font-black ${changePct >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                        {formatNumber(currentIndex)}
+                {hasData ? (
+                    <div className="text-right">
+                        <div className={`text-4xl font-black ${changePct >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                            {formatNumber(currentIndex)}
+                        </div>
+                        <div className={`text-sm font-bold flex items-center justify-end gap-1 ${changePct >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                            <span>{changePct >= 0 ? '▲' : '▼'}</span>
+                            {Math.abs(changePct).toFixed(2)}%
+                        </div>
                     </div>
-                    <div className={`text-sm font-bold flex items-center justify-end gap-1 ${changePct >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                        <span>{changePct >= 0 ? '▲' : '▼'}</span>
-                        {Math.abs(changePct).toFixed(2)}%
-                    </div>
-                </div>
+                ) : (
+                    <div className="text-4xl font-black text-slate-400">—</div>
+                )}
             </div>
 
             <div className="flex-1 min-h-0">
