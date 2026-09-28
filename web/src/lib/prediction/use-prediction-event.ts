@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { fetchPredictionData, fetchEventList } from "@/lib/prediction-api";
+import { fetchPredictionData, fetchEventList, fetchGlobalKline } from "@/lib/prediction-api";
 import {
     applyLiveSyncToPrediction,
     loadPredictionContextSource,
@@ -490,6 +490,18 @@ export function usePredictionEvent(options: UsePredictionEventOptions = {}): Use
             if (isPolling) return;
             isPolling = true;
             try {
+                // 0. A PGAI kline that failed to load is asked for again until it arrives
+                const shown = predictionDataRef.current;
+                if (shown?.data?.event_id === selectedEventId && shown.data.global_kline.length === 0) {
+                    const kline = await fetchGlobalKline(selectedEventId, server);
+                    if (cancelled) return;
+                    if (kline.length > 0) {
+                        setPredictionData(prev => prev?.data?.event_id === selectedEventId
+                            ? { ...prev, data: { ...prev.data, global_kline: kline } }
+                            : prev);
+                    }
+                }
+
                 // 1. Fetch fresh standard realtime ranking snapshot
                 const freshSnapshot = await fetchLatestV2(server);
                 if (cancelled) return;

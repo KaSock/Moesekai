@@ -184,7 +184,32 @@ function mapGlobalKline(klineData: RkKlineResponse | null): KLinePoint[] {
     }));
 }
 
-async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: number, globalKline: KLinePoint[] = []): Promise<PredictionData> {
+/**
+ * rk's kline response of an event (PGAI candles and tier speeds); null when rk fails (it often answers 522/525).
+ * Only rk's answers are cached, so a failed load can be asked for again right away.
+ */
+function fetchRkKline(eventId: number, server: ServerType): Promise<RkKlineResponse | null> {
+    const cached = getCachedKline(server, eventId);
+    if (cached !== undefined) return Promise.resolve(cached);
+    return dedupeInflight(`kline:${server}:${eventId}`, async () => {
+        try {
+            const res = await fetch(`${BASE_URL}/public/event/${eventId}/kline?region=${server}`, { signal: AbortSignal.timeout(3500) });
+            if (!res.ok) return null;
+            const data: RkKlineResponse = await res.json();
+            setCachedKline(server, eventId, data);
+            return data;
+        } catch {
+            return null;
+        }
+    });
+}
+
+/** PGAI kline of an event; [] when rk fails. */
+export function fetchGlobalKline(eventId: number, server: ServerType): Promise<KLinePoint[]> {
+    return fetchRkKline(eventId, server).then(mapGlobalKline);
+}
+
+async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: number, globalKline: Promise<KLinePoint[]>): Promise<PredictionData> {
     const livePromise = loadLivePrediction();
     const latestSnapshot = await fetchLatestV2(server);
     // v2 serves only the region's running event; another event's tiers must not be shown under this one.
@@ -310,7 +335,7 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
             event_id: eventId,
             event_name: eventMeta?.name || '',
             charts,
-            global_kline: globalKline,
+            global_kline: await globalKline,
             tier_klines,
         },
     };
@@ -328,34 +353,25 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
             (live) => live.awaitContextSource(server, eventId),
             () => null,
         );
-        let globalKline: KLinePoint[] = [];
+        // Loads on its own, so a slow or failed latest/timeline request does not take the kline with it.
+        const klinePromise = fetchRkKline(eventId, server);
+        const globalKline = klinePromise.then(mapGlobalKline);
         try {
-            // Check SWR caches for heavy timeline and kline data
+            // Check SWR cache for heavy timeline data
             const cachedTimeline = getCachedTimeline(server, eventId);
-            const cachedKline = getCachedKline(server, eventId);
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-            const fetchPromises: [Promise<Response>, Promise<Response | null>, Promise<Response | null>] = [
+            const fetchPromises: [Promise<Response>, Promise<Response | null>] = [
                 fetch(`${base}/latest?${region}`, { cache: 'no-store', signal: controller.signal }),
                 cachedTimeline ? Promise.resolve(null) : fetch(`${base}/timeline?${region}`, { signal: controller.signal }),
-                cachedKline !== undefined ? Promise.resolve(null) : fetch(`${base}/kline?${region}`, { signal: controller.signal }),
             ];
 
-            const [latestRes, timelineRes, klineRes] = await Promise.all(fetchPromises);
+            const [latestRes, timelineRes] = await Promise.all(fetchPromises);
             clearTimeout(timeoutId);
 
             const latest: RkLatestResponse | null = latestRes.ok ? await latestRes.json() : null;
-
-            let klineData: RkKlineResponse | null = null;
-            if (cachedKline !== undefined) {
-                klineData = cachedKline;
-            } else if (klineRes && klineRes.ok) {
-                klineData = await klineRes.json();
-                setCachedKline(server, eventId, klineData);
-            }
-            globalKline = mapGlobalKline(klineData);
 
             // rk can list a running event without any tiers (JP #218); the v2 snapshot of the same event fills in.
             // A running event whose v2 load fails goes to the fallback below and rejects if that fails too, so the
@@ -481,6 +497,7 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                 });
 
                 // ── Compute tier_klines from API tier_speeds ────────────────────────────
+                const klineData = await klinePromise;
                 const tier_klines: TierKLine[] = [];
                 if (isActive && klineData?.tier_speeds) {
                     const tlEntries = timeline.timeline ?? [];
@@ -542,7 +559,7 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                         event_id: eventId,
                         event_name: '',
                         charts,
-                        global_kline: globalKline,
+                        global_kline: await globalKline,
                         tier_klines,
                     },
                 };

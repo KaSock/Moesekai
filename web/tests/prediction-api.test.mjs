@@ -1,6 +1,6 @@
 /**
  * 预测页的数据与走势图：prediction-api.ts（fetchPredictionData 的 rk 与 v2 两条路径）、
- * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行），以及 PredictionChart 的预测显示开关与 PGAIChart 的空数据显示。
+ * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行）与 K 线的轮询补取，以及 PredictionChart 的预测显示开关与 PGAIChart 的空数据显示。
  * Run with: node --test --experimental-strip-types tests/prediction-api.test.mjs
  * 规则与主数据来自 tests/fixtures/event-rules（W6 的 masterdata 夹具），模型参数为提交的 priors.json；
  * 上游（rk、rks-n v2、metadata）全部用桩替换。
@@ -430,6 +430,51 @@ test("PGAI kline on the v2 fallback (rk lists #218 without tiers): the chart sti
   const data = await api.fetchPredictionData(218, "jp");
   assert.ok(data.data.charts.length > 0, "the v2 snapshot supplied the rows");
   assert.deepEqual(klineHours(data), KLINE_HOURS_UTC);
+});
+
+test("PGAI kline when rk's latest and timeline requests fail outright: the v2 fallback still gets rk's kline", async () => {
+  // 国服 #178：latest 与 timeline 连接失败（与 3.5 s 超时中止一样是 reject），kline 正常返回。
+  const row = eventRow("cn", 178);
+  const rankings = Array.from({ length: 100 }, (_, i) => ({ rank: i + 1, score: Math.round(40_000_000 / Math.sqrt(i + 1)), userId: String(i + 1), name: "p" }));
+  const refused = () => { throw new TypeError("Failed to fetch"); };
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/178\/kline/, json({ event_id: 178, status: "active", klines: RK_KLINES, tier_speeds: [] })],
+    [/rk\.exmeaning\.com\/public\/event\/178\//, refused],
+    [/\/v2\/cn\/latest/, json({ event_id: 178, region: "cn", start_at: row.startAt, end_at: row.aggregateAt, updated_at: row.startAt + 30 * HOUR, is_event_aggregate: false, rankings })],
+    [/\/v2\/cn\/tier-series/, json({ error: "origin error" }, 522)],
+  ]);
+  const data = await api.fetchPredictionData(178, "cn");
+  assert.ok(data.data.charts.length > 0, "the v2 snapshot supplied the rows");
+  assert.deepEqual(klineHours(data), KLINE_HOURS_UTC);
+});
+
+test("PGAI kline that failed on the page load arrives with a later poll tick", async () => {
+  // 国服 #180：首次加载时 kline 525，之后恢复；页面每 10 s 一次的轮询（这里缩成 50 ms）把 K 线补上。
+  let klineCalls = 0;
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/events/, json(RK_EVENTS.cn)],
+    [/rk\.exmeaning\.com\/public\/event\/180\/latest/, json(rkFinal(180, 3_000_000_000))],
+    [/rk\.exmeaning\.com\/public\/event\/180\/timeline/, json({ event_id: 180, status: "finished", granularity: 0, final_only: true, timeline: [] })],
+    [/rk\.exmeaning\.com\/public\/event\/180\/kline/, () => (++klineCalls === 1
+      ? json({ error: "origin error" }, 525)
+      : json({ event_id: 180, status: "active", klines: RK_KLINES, tier_speeds: [] }))()],
+    [/\/v2\/cn\//, json({ error: "origin error" }, 522)],
+  ]);
+  const realSetInterval = globalThis.setInterval;
+  globalThis.setInterval = (fn, ms, ...rest) => realSetInterval(fn, ms === 10_000 ? 50 : ms, ...rest);
+  try {
+    const hook = await mountHook({ initialServer: "cn", initialEventId: 180 });
+    try {
+      await hook.waitFor((s) => s.activePredictionData?.data.global_kline.length === 2, "the kline from a poll tick");
+      assert.equal(klineCalls, 2, "one failed load, one retry");
+      assert.deepEqual(klineHours(hook.latest().activePredictionData), KLINE_HOURS_UTC);
+      assert.ok(hook.latest().activePredictionData.data.charts.length > 0, "the rows stay");
+    } finally {
+      await hook.unmount();
+    }
+  } finally {
+    globalThis.setInterval = realSetInterval;
+  }
 });
 
 test("PGAIChart: without kline data it shows a dash and no change; with data, the last close and its change", async () => {
