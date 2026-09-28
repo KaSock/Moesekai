@@ -30,6 +30,10 @@ import { IEventInfo } from '@/types/events';
 import type { PredictionContextSource } from '@/lib/prediction/live-prediction';
 
 const BASE_URL = 'https://rk.exmeaning.com';
+/** Wait for rk's latest and timeline headers before the page tries the v2 snapshot. */
+const RK_TIMEOUT_MS = 3500;
+/** Wait on the second rk attempt, made only after the v2 snapshot failed too (rk often takes 2-5 s or answers 525). */
+const RK_RETRY_TIMEOUT_MS = 10_000;
 /** Tiers built from a v2 snapshot when the event's reward tiers are unknown (masterdata unavailable). */
 const TARGET_TIERS = [50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 5000, 10000];
 
@@ -322,7 +326,7 @@ async function buildPredictionDataFromRealtimeV2(server: ServerType, eventId: nu
         return {
             Rank: chart.Rank,
             Data: [],
-            CurrentIndex: score,
+            CurrentIndex: null,
             Speed: speed,
             ChangePct: 0,
         };
@@ -356,16 +360,25 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
         // Loads on its own, so a slow or failed latest/timeline request does not take the kline with it.
         const klinePromise = fetchRkKline(eventId, server);
         const globalKline = klinePromise.then(mapGlobalKline);
-        try {
+        /**
+         * The event from rk's latest and timeline; null when rk's latest is not OK. `retry` is the second attempt,
+         * made after the v2 snapshot failed: it waits longer, and a failed timeline leaves the rows without history.
+         */
+        const fromRk = async (retry: boolean): Promise<PredictionData | null> => {
             // Check SWR cache for heavy timeline data
             const cachedTimeline = getCachedTimeline(server, eventId);
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
+            const timeoutId = setTimeout(() => controller.abort(), retry ? RK_RETRY_TIMEOUT_MS : RK_TIMEOUT_MS);
 
             const fetchPromises: [Promise<Response>, Promise<Response | null>] = [
                 fetch(`${base}/latest?${region}`, { cache: 'no-store', signal: controller.signal }),
-                cachedTimeline ? Promise.resolve(null) : fetch(`${base}/timeline?${region}`, { signal: controller.signal }),
+                cachedTimeline
+                    ? Promise.resolve(null)
+                    : fetch(`${base}/timeline?${region}`, { signal: controller.signal }).catch((err: unknown) => {
+                        if (retry) return null;
+                        throw err;
+                    }),
             ];
 
             const [latestRes, timelineRes] = await Promise.all(fetchPromises);
@@ -377,7 +390,9 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
             // A running event whose v2 load fails goes to the fallback below and rejects if that fails too, so the
             // page reports the failure and its poll retries; other events keep their empty rk result.
             if (latest && !(Array.isArray(latest.items) && latest.items.length > 0)) {
-                const realtime = await buildPredictionDataFromRealtimeV2(server, eventId, globalKline).catch((err: unknown) => {
+                // On the retry the v2 snapshot has already failed, so a running event has nothing to fill in.
+                if (retry && latest.status === 'active') return null;
+                const realtime = retry ? null : await buildPredictionDataFromRealtimeV2(server, eventId, globalKline).catch((err: unknown) => {
                     if (latest.status === 'active') throw err;
                     return null;
                 });
@@ -544,7 +559,7 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                             tier_klines.push({
                                 Rank: item.rank,
                                 Data: [],
-                                CurrentIndex: item.score,
+                                CurrentIndex: null,
                                 Speed: speed,
                                 ChangePct: changePct,
                             });
@@ -564,11 +579,26 @@ export async function fetchPredictionData(eventId: number, server: ServerType): 
                     },
                 };
             }
+            return null;
+        };
+
+        try {
+            const primary = await fromRk(false);
+            if (primary) return primary;
         } catch (err) {
             console.warn('[prediction-api] Primary endpoint failed, falling back to realtime ranking snapshot:', err);
         }
 
-        // Fallback to Realtime Ranking V2 snapshot
-        return buildPredictionDataFromRealtimeV2(server, eventId, globalKline);
+        try {
+            return await buildPredictionDataFromRealtimeV2(server, eventId, globalKline);
+        } catch (v2Err) {
+            // v2 serves only the region's running event, so a finished event depends on rk: ask it once more.
+            const retried = await fromRk(true).catch((err: unknown) => {
+                console.warn('[prediction-api] rk retry failed:', err);
+                return null;
+            });
+            if (retried) return retried;
+            throw v2Err;
+        }
     });
 }

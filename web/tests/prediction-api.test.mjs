@@ -1,6 +1,7 @@
 /**
  * 预测页的数据与走势图：prediction-api.ts（fetchPredictionData 的 rk 与 v2 两条路径）、
- * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行）与 K 线的轮询补取，以及 PredictionChart 的预测显示开关与 PGAIChart 的空数据显示。
+ * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行）与 K 线的轮询补取，已结束活动的 rk 重试，分档卡片的指数，
+ * 以及 PredictionChart 的预测显示开关、PGAIChart 的空数据显示与 ActivityStats 的空指数显示。
  * Run with: node --test --experimental-strip-types tests/prediction-api.test.mjs
  * 规则与主数据来自 tests/fixtures/event-rules（W6 的 masterdata 夹具），模型参数为提交的 priors.json；
  * 上游（rk、rks-n v2、metadata）全部用桩替换。
@@ -17,9 +18,10 @@ const SRC_ROOT = fileURLToPath(new URL("../src/", import.meta.url));
 const SRC_URL = pathToFileURL(SRC_ROOT).href;
 const CHART_URL = pathToFileURL(resolvePath(SRC_ROOT, "components/events/PredictionChart.tsx")).href;
 const PGAI_URL = pathToFileURL(resolvePath(SRC_ROOT, "components/events/PGAIChart.tsx")).href;
+const ACTIVITY_URL = pathToFileURL(resolvePath(SRC_ROOT, "components/events/ActivityStats.tsx")).href;
 
 // 与 prediction-engine.test.mjs 相同的加载钩子：@/ 别名与无扩展名导入按 tsconfig 解析，src 下的 .ts 用 TypeScript
-// 转译，不带 type 属性的 JSON 导入转成 ES 模块。.tsx 里只有 PredictionChart 与 PGAIChart 按 JSX 转译，其余给空模块；
+// 转译，不带 type 属性的 JSON 导入转成 ES 模块。.tsx 里只有 PredictionChart、PGAIChart 与 ActivityStats 按 JSX 转译，其余给空模块；
 // 两个 React context 和 echarts-for-react 换成最小实现（后者记下传给图表的 option，供断言）。
 const STUBS = {
   "@/contexts/I18nContext": "const t = (key) => key; const formatNumber = (n) => String(n); const api = { t, formatNumber }; export function useI18n() { return api; }",
@@ -48,7 +50,7 @@ registerHooks({
       });
       return { format: "module", source: outputText, shortCircuit: true };
     };
-    if (url === CHART_URL || url === PGAI_URL) return transpile(true);
+    if (url === CHART_URL || url === PGAI_URL || url === ACTIVITY_URL) return transpile(true);
     if (url.startsWith("file:") && url.endsWith(".tsx")) return { format: "module", source: "export {};", shortCircuit: true };
     if (url.startsWith(SRC_URL) && url.endsWith(".ts")) return transpile(false);
     if (url.startsWith("file:") && url.endsWith(".json") && !url.includes("/node_modules/") && context.importAttributes?.type !== "json") {
@@ -162,6 +164,8 @@ test("v2 fallback: tiers whose series end up to 60 s before the snapshot end on 
   const t1 = data.data.charts.find((c) => c.Rank === 1);
   assert.equal(t1.HistoryPoints.filter((p) => new Date(p.t).getTime() > updatedAt - 60_000).length, 1);
   assertMonotoneQuantiles(data.data.charts);
+  // The tier cards' index is rk's (the PGAI scale); a v2 snapshot has none, so every tier gets null.
+  assert.deepEqual(data.data.tier_klines.map((k) => k.CurrentIndex), data.data.charts.map(() => null));
 });
 
 test("rk path: a timeline frame 30 s before the snapshot is moved onto it, like a tier the frame misses", async () => {
@@ -498,4 +502,132 @@ test("PGAIChart: without kline data it shows a dash and no change; with data, th
   // (8882 - 10807) / 10807 = -17.81 %
   assert.ok(full.html.includes("▼") && full.html.includes("17.81%"), full.html);
   assert.equal(full.option.series[0].data.length, 2);
+});
+
+// ---------------------------------------------------------------------------
+// 已结束的活动：v2 只提供本服进行中的活动，rk 首次失败时再请求一次
+// ---------------------------------------------------------------------------
+
+const refusedReply = () => { throw new TypeError("Failed to fetch"); };
+
+/** Replies with `first` to the first request and with `rest` to every later one; `calls()` counts the requests. */
+function sequence(first, rest) {
+  let n = 0;
+  const reply = () => (++n === 1 ? first : rest)();
+  reply.calls = () => n;
+  return reply;
+}
+
+test("finished event: rk's latest answers 525 and v2 has no board for it, so rk is asked once more", async () => {
+  // 国服 #180 结束后线上 6 次 latest 有 2 次 525；v2 只提供进行中的活动（404）。这里是国服 #179。
+  const final = rkFinal(179, 3_000_000_000);
+  const latest = sequence(json({ error: "origin error" }, 525), json(final));
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/179\/latest/, latest],
+    [/rk\.exmeaning\.com\/public\/event\/179\/timeline/, json({ event_id: 179, status: "finished", granularity: 0, final_only: true, timeline: [] })],
+    [/rk\.exmeaning\.com\/public\/event\/179\/kline/, json({ klines: [] })],
+    [/\/v2\/cn\/latest/, json({ error: "not found" }, 404)],
+  ]);
+  const data = await api.fetchPredictionData(179, "cn");
+  assert.equal(latest.calls(), 2);
+  assert.deepEqual(data.data.charts.map((c) => [c.Rank, c.CurrentScore]), final.items.map((i) => [i.rank, i.score]));
+});
+
+test("finished event: rk's latest and timeline fail outright and v2 serves another event; the retry goes on without the timeline", async () => {
+  // 日服 #211 已结束：首次 latest 与 timeline 连接失败（与 3.5 s 超时中止一样是 reject），v2 是另一期（#214）的榜；
+  // 第二次 latest 正常，timeline 仍失败，各档没有历史点。
+  const final = rkFinal(211, 3_000_000_000);
+  const latest = sequence(refusedReply, json(final));
+  const other = eventRow("jp", 214);
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/211\/latest/, latest],
+    [/rk\.exmeaning\.com\/public\/event\/211\/timeline/, refusedReply],
+    [/rk\.exmeaning\.com\/public\/event\/211\/kline/, json({ klines: [] })],
+    [/\/v2\/jp\/latest/, json({ event_id: 214, region: "jp", start_at: other.startAt, end_at: other.aggregateAt, updated_at: other.startAt + 30 * HOUR, is_event_aggregate: false, rankings: boardEntries(2_000_000_000) })],
+  ]);
+  const data = await api.fetchPredictionData(211, "jp");
+  assert.equal(latest.calls(), 2);
+  assert.deepEqual(data.data.charts.map((c) => [c.Rank, c.CurrentScore]), final.items.map((i) => [i.rank, i.score]));
+  for (const c of data.data.charts) assert.deepEqual(c.HistoryPoints, [], `T${c.Rank}`);
+});
+
+test("rk failing twice and v2 failing: the load rejects with the v2 error", async () => {
+  const latest = sequence(json({ error: "origin error" }, 525), json({ error: "origin error" }, 525));
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/205\/latest/, latest],
+    [/rk\.exmeaning\.com\/public\/event\/205\//, json({ error: "origin error" }, 525)],
+    [/\/v2\/jp\/latest/, json({ error: "origin error" }, 522)],
+  ]);
+  await assert.rejects(api.fetchPredictionData(205, "jp"), (err) => err.status === 522);
+  assert.equal(latest.calls(), 2);
+});
+
+// ---------------------------------------------------------------------------
+// 分档卡片（最活跃 / 最摸鱼）的指数：只取 rk kline 的 index_value（PGAI 的量级），没有时为 null
+// ---------------------------------------------------------------------------
+
+/** rk latest and timeline of a running JP marathon at hour 50, with frames at hours 49 and 50. */
+function rkRunning(eventId) {
+  const rules = rulesOf("jp", eventId);
+  const at = (h) => rules.scopeStartAt + h * HOUR;
+  const score = (rank, h) => Math.round((90_000_000 / Math.sqrt(rank)) * h / 50);
+  const ranks = [100, 1000];
+  const collect = new Date(at(50)).toISOString();
+  const frame = (h) => ({ collect_time: new Date(at(h)).toISOString(), items: ranks.map((rank) => ({ rank, score: score(rank, h), prediction: null })) });
+  return {
+    latest: { event_id: eventId, status: "active", updated_at: collect, items: ranks.map((rank) => ({ rank, score: score(rank, 50), prediction: null, collect_time: collect, is_final: false })) },
+    timeline: { event_id: eventId, status: "active", granularity: 1, final_only: false, timeline: [frame(49), frame(50)] },
+    hourly: (rank) => score(rank, 50) - score(rank, 49),
+    syncAt: (h) => ({ region: "jp", eventId, updatedAt: at(h), tierScores: Object.fromEntries(ranks.map((rank) => [rank, { rank, score: score(rank, h) }])), source: "prediction" }),
+    contextFor: (tiers) => live.predictionContextFor(null, { kind: "overall" }, tiers, {
+      region: "jp", eventId, eventType: "marathon", startAt: rules.scopeStartAt, endAt: rules.scopeAggregateAt, chapterCharacterId: null, chapterNo: null,
+    }),
+    rules,
+  };
+}
+
+test("tier cards on the rk path: the index is rk's index_value; without rk's tier speeds it is null, and a live sync keeps it", async () => {
+  const withSpeeds = rkRunning(197);
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/197\/latest/, json(withSpeeds.latest)],
+    [/rk\.exmeaning\.com\/public\/event\/197\/timeline/, json(withSpeeds.timeline)],
+    [/rk\.exmeaning\.com\/public\/event\/197\/kline/, json({
+      event_id: 197, status: "active", klines: [],
+      tier_speeds: [{ rank: 100, speed_ph: 1_234_567, index_value: 6272 }, { rank: 1000, speed_ph: 345_678, index_value: 11216 }],
+    })],
+  ]);
+  const indexed = await api.fetchPredictionData(197, "jp");
+  const cards = (data) => data.data.tier_klines.map((k) => [k.Rank, k.CurrentIndex, k.Speed]);
+  assert.deepEqual(cards(indexed), [[100, 6272, 1_234_567], [1000, 11216, 345_678]]);
+
+  // 日服 #198：kline 525，分档卡片由 timeline 最后两帧算速度，指数为 null（不是该档分数）。
+  const noSpeeds = rkRunning(198);
+  stubFetch([
+    [/rk\.exmeaning\.com\/public\/event\/198\/latest/, json(noSpeeds.latest)],
+    [/rk\.exmeaning\.com\/public\/event\/198\/timeline/, json(noSpeeds.timeline)],
+    [/rk\.exmeaning\.com\/public\/event\/198\/kline/, json({ error: "origin error" }, 525)],
+  ]);
+  const unindexed = await api.fetchPredictionData(198, "jp");
+  assert.deepEqual(cards(unindexed), [[100, null, noSpeeds.hourly(100)], [1000, null, noSpeeds.hourly(1000)]]);
+
+  // A live sync moves the scores; the index stays rk's (or null) instead of becoming the new score.
+  const sync = (source, data) => live.applyLiveSyncToPrediction(data, source.syncAt(50.5), "jp", source.rules.scopeStartAt, source.rules.scopeAggregateAt, source.contextFor);
+  const synced = sync(withSpeeds, indexed);
+  assert.notDeepEqual(synced.data.charts.map((c) => c.CurrentScore), indexed.data.charts.map((c) => c.CurrentScore));
+  assert.deepEqual(synced.data.tier_klines.map((k) => k.CurrentIndex), [6272, 11216]);
+  assert.deepEqual(sync(noSpeeds, unindexed).data.tier_klines.map((k) => k.CurrentIndex), [null, null]);
+});
+
+test("ActivityStats: a tier without an index shows a dash; a tier with one shows the index", async () => {
+  const React = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { default: ActivityStats } = await import("../src/components/events/ActivityStats.tsx");
+  const tiers = [
+    { Rank: 100, Data: [], CurrentIndex: null, Speed: 1_234_567, ChangePct: 1.5 },
+    { Rank: 1000, Data: [], CurrentIndex: 6272, Speed: 345_678, ChangePct: -0.5 },
+  ];
+  const html = renderToStaticMarkup(React.createElement(ActivityStats, { tiers }));
+  assert.ok(html.includes('title="—">—<'), html);
+  assert.ok(html.includes('title="6272">6272<'), html);
+  assert.ok(!html.includes("null"), html);
 });

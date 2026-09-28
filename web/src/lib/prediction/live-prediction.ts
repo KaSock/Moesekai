@@ -281,7 +281,7 @@ export function applyLiveSyncToPrediction(
         return {
             Rank: chart.Rank,
             Data: existing?.Data || [],
-            CurrentIndex: chart.CurrentScore,
+            CurrentIndex: existing?.CurrentIndex ?? null,
             Speed: speed,
             ChangePct: existing?.ChangePct ?? 0,
         };

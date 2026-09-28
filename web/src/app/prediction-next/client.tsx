@@ -431,7 +431,7 @@ export default function PredictionNextClient() {
                                                                 ? {
                                                                     Rank: legacyTier.rank,
                                                                     Data: [],
-                                                                    CurrentIndex: legacyTier.CurrentIndex ?? legacyTier.currentIndex ?? 0,
+                                                                    CurrentIndex: legacyTier.CurrentIndex ?? legacyTier.currentIndex ?? null,
                                                                     Speed: legacyTier.Speed ?? legacyTier.speed ?? 0,
                                                                     ChangePct: legacyTier.ChangePct ?? legacyTier.changePct ?? 0,
                                                                 }

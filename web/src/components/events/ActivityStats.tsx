@@ -22,11 +22,13 @@ function StatBlock({ title, data, type }: StatBlockProps) {
                 <h3 className="font-bold text-slate-700 text-xs sm:text-sm uppercase">{title}</h3>
             </div>
             <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                {data.map((tier) => (
+                {data.map((tier) => {
+                    const index = tier.CurrentIndex == null ? '—' : formatNumber(tier.CurrentIndex);
+                    return (
                     <div key={tier.Rank} className={`p-2 sm:p-3 rounded-lg text-center border ${type === 'active' ? 'bg-red-50/50 border-red-100' : 'bg-slate-50/50 border-slate-100'}`}>
                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t("page.prediction.activityStats.rank", { rank: tier.Rank })}</div>
-                        <div className="text-sm sm:text-base md:text-lg font-black text-slate-800 tabular-nums leading-tight mb-1 truncate" title={formatNumber(tier.CurrentIndex)}>
-                            {formatNumber(tier.CurrentIndex)}
+                        <div className="text-sm sm:text-base md:text-lg font-black text-slate-800 tabular-nums leading-tight mb-1 truncate" title={index}>
+                            {index}
                         </div>
 
                         <div className={`text-[11px] sm:text-xs font-bold ${tier.ChangePct >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -36,7 +38,8 @@ function StatBlock({ title, data, type }: StatBlockProps) {
                             ({formatNumber(tier.Speed)}/h)
                         </div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

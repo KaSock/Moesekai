@@ -760,7 +760,7 @@ export function usePredictionEvent(options: UsePredictionEventOptions = {}): Use
             return {
                 Rank: rank,
                 Data: sparklineData,
-                CurrentIndex: score,
+                CurrentIndex: null,
                 Speed: speed,
                 ChangePct: 0,
             };

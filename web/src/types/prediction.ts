@@ -30,7 +30,8 @@ export interface KLinePoint {
 export interface TierKLine {
     Rank: number;
     Data: KLinePoint[];
-    CurrentIndex: number;
+    /** rk's activity index of the tier (the PGAI scale); null when rk's tier speeds are not available. */
+    CurrentIndex: number | null;
     Speed: number;
     ChangePct: number;
 }
