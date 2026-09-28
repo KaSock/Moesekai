@@ -17,11 +17,12 @@ import {
     curveLookupChain,
     expectedShare,
     projectPath,
+    resolveCurveCell,
     shareLogSigma,
 } from "../src/lib/prediction/model/curve.ts";
 import { contextFromDataset } from "../src/lib/prediction/model/dataset-context.ts";
 import { CURVE_FIT_DEFAULTS, fitCurve } from "../scripts/prediction-backtest/fit-curve.mjs";
-import { DEFAULT_DATA_DIR, loadDataset } from "../scripts/prediction-backtest/dataset.mjs";
+import { DEFAULT_DATA_DIR, loadDataset, subsetDataset } from "../scripts/prediction-backtest/dataset.mjs";
 
 const H = 3_600_000;
 const T0 = Date.UTC(2025, 0, 6, 6, 0, 0); // JST 15:00
@@ -150,11 +151,16 @@ test("curveCellKey: groups, break gauge, VS chapters and finales stay apart", ()
     assert.equal(curveCellKey(ctxOf({ region: "cn", group: "wl_finale", wlTurn: 2, eventId: 180 })), "cn|wl_finale|2|#180");
 });
 
-test("curveLookupChain: finales never share; CN borrows JP and cross-turn pooling only when enabled", () => {
-    const on = { cnFromJp: true, crossTurn: true };
-    const off = { cnFromJp: false, crossTurn: false };
+test("curveLookupChain: finales of different events never share; CN borrows JP and cross-turn pooling only when enabled", () => {
+    const on = { cnFromJp: true, crossTurn: true, cnFinaleFromJp: false };
+    const off = { cnFromJp: false, crossTurn: false, cnFinaleFromJp: false };
+    const finaleOn = { ...off, cnFinaleFromJp: true };
     assert.deepEqual(curveLookupChain("cn|wl_finale|2|#180", on), ["cn|wl_finale|2|#180"]);
     assert.deepEqual(curveLookupChain("jp|wl_finale|3|#218", on), ["jp|wl_finale|3|#218"]);
+    assert.deepEqual(curveLookupChain("cn|wl_finale|2|#180", finaleOn), ["cn|wl_finale|2|#180", "jp|wl_finale|2|#180"]);
+    assert.deepEqual(curveLookupChain("cn|wl_finale|3|#218", finaleOn), ["cn|wl_finale|3|#218", "jp|wl_finale|3|#218"]);
+    assert.deepEqual(curveLookupChain("jp|wl_finale|3|#218", finaleOn), ["jp|wl_finale|3|#218"]);
+    assert.deepEqual(curveLookupChain("cn|normal|-|gauge", finaleOn), ["cn|normal|-|gauge", "cn|normal|-"]);
     assert.deepEqual(curveLookupChain("cn|normal|-|gauge", on), ["cn|normal|-|gauge", "cn|normal|-", "jp|normal|-|gauge", "jp|normal|-"]);
     assert.deepEqual(curveLookupChain("cn|normal|-|gauge", off), ["cn|normal|-|gauge", "cn|normal|-"]);
     assert.deepEqual(curveLookupChain("jp|wl_chapter_48h|2|vs", on), ["jp|wl_chapter_48h|2|vs", "jp|wl_chapter_48h|2", "jp|wl_chapter_48h|*|vs", "jp|wl_chapter_48h|*"]);
@@ -387,8 +393,11 @@ test("real data: cells keep editions apart and every event's curve is a valid sh
     const keys = Object.keys(section.cells);
     assert.ok(keys.includes("jp|normal|-|gauge") && keys.includes("jp|normal|-|nogauge"));
     assert.ok(keys.includes("jp|wl_finale|2|#180"));
-    assert.ok(!keys.some((k) => k.startsWith("jp|wl_finale|3")), "no #218 cell before it has a final");
+    // Each finale keeps its own cell: JP #218 (break gauge) never borrows from #180; CN #180 shrinks toward JP #180 only.
+    assert.ok(keys.includes("jp|wl_finale|3|#218"));
+    assert.equal(section.cells["jp|wl_finale|3|#218"].shrunkToward, null);
     assert.equal(section.cells["jp|wl_finale|2|#180"].shrunkToward, null);
+    assert.equal(section.cells["cn|wl_finale|2|#180"].shrunkToward, "jp|wl_finale|2|#180");
     // The prediction contexts carry the event end, so the shipped table is fitted and reachable (R13-1, R9-4).
     for (const key of ["jp|wl_chapter_48h|3|last", "jp|wl_chapter_72h|2|last", "jp|wl_chapter_48h|*|last", "jp|wl_chapter_72h|*|last"]) {
         assert.ok(key in section.chapterPosition, key);
@@ -415,10 +424,17 @@ test("real data: cells keep editions apart and every event's curve is a valid sh
             }
         }
     }
-    // JP #218 and CN #180 have no data of their own: linear share, not JP #180's curve.
+    // Fitted before JP #218 and CN #180 had data: JP #218 gets the linear share (never JP #180's curve), CN #180 gets JP #180's cell.
+    const running = (e) => (e.region === "jp" && e.eventId === 218) || (e.region === "cn" && e.eventId === 180);
+    const early = fitCurve(subsetDataset(data, data.events.filter((e) => !running(e))));
     const jp218 = data.events.find((e) => e.region === "jp" && e.eventId === 218);
     const ctx218 = contextFromDataset(jp218, { kind: "overall" }, jp218.startAt, [], null);
     const t36 = jp218.startAt + 36 * H;
     const linear = (t36 - ctx218.scopeStartAt) / (ctx218.scopeEndAt - ctx218.scopeStartAt);
-    assert.ok(Math.abs(expectedShare(ctx218, t36, section, 1000) - linear) < 1e-12);
+    assert.ok(Math.abs(expectedShare(ctx218, t36, early, 1000) - linear) < 1e-12);
+    const cn180 = data.events.find((e) => e.region === "cn" && e.eventId === 180);
+    const ctxCn180 = contextFromDataset(cn180, { kind: "overall" }, cn180.startAt, [], null);
+    assert.equal(early.cells["cn|wl_finale|2|#180"], undefined);
+    assert.equal(resolveCurveCell(ctxCn180, early, "profiles"), early.cells["jp|wl_finale|2|#180"]);
+    assert.equal(resolveCurveCell(ctxCn180, { ...early, cnFinaleFromJp: false }, "profiles"), null);
 });

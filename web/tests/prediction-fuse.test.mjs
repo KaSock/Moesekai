@@ -271,7 +271,7 @@ test("predictFromSections: fallback cells return null unless a legacy path is gi
     const empty = { version: 1, cells: {}, families: {}, progressKnots: [0.5] };
     const curve = {
         version: 1, anchors: [1], rhythmBands: [], openEdgesHours: [], endEdgesHours: [], trendBins: 1, sigmaGrid: [0.5],
-        cnFromJp: false, crossTurn: false, cells: {}, uniformSigma: [[0.1]], fit: {},
+        cnFromJp: false, cnFinaleFromJp: false, crossTurn: false, cells: {}, uniformSigma: [[0.1]], fit: {},
     };
     const prior = { version: 1, epochMs: 0, hoursRef: 192, maxExtrapolationYears: 1, cnBlend: false, features: {}, regions: {}, cnRatio: null };
     const fuse = sectionOf();
@@ -303,7 +303,7 @@ test("predictFromSections: a stale lower tier whose ceiling passes a fresher hig
     const empty = { version: 1, cells: {}, families: {}, progressKnots: [0.5] };
     const curve = {
         version: 1, anchors: [1], rhythmBands: [], openEdgesHours: [], endEdgesHours: [], trendBins: 1, sigmaGrid: [0.5],
-        cnFromJp: false, crossTurn: false, cells: {}, uniformSigma: [[0.1]], fit: {},
+        cnFromJp: false, cnFinaleFromJp: false, crossTurn: false, cells: {}, uniformSigma: [[0.1]], fit: {},
     };
     const prior = { version: 1, epochMs: 0, hoursRef: 192, maxExtrapolationYears: 1, cnBlend: false, features: {}, regions: {}, cnRatio: null };
     const fuse = sectionOf({ ceiling: { jp: { ranks: [50, 100], perHour: [5, 5] } } });

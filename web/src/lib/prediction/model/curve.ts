@@ -83,6 +83,8 @@ export interface CurveSection {
     sigmaGrid: number[];
     /** Whether a CN cell without data may use the JP cell with the same key (never for finales). */
     cnFromJp: boolean;
+    /** Whether a CN finale without data may use the JP finale of the same event id. */
+    cnFinaleFromJp: boolean;
     /** Whether a WL chapter or overall cell without data may use the same cell pooled over WL turns. */
     crossTurn: boolean;
     cells: Record<string, CurveCell>;
@@ -155,14 +157,16 @@ function isFinaleKey(key: string): boolean {
 export interface CurveSharing {
     cnFromJp: boolean;
     crossTurn: boolean;
+    cnFinaleFromJp: boolean;
 }
 
 /**
  * Lookup order: own cell, its pooled parent; then (CN, if enabled) the same JP cells; then (if enabled) the same
- * cells pooled over WL turns. Finales only ever use their own cell.
+ * cells pooled over WL turns. A finale uses its own cell, then (CN, if enabled) the JP finale of the same event id;
+ * finales of different events are never shared.
  */
 export function curveLookupChain(key: string, sharing: CurveSharing): string[] {
-    if (isFinaleKey(key)) return [key];
+    if (isFinaleKey(key)) return sharing.cnFinaleFromJp && key.startsWith("cn|") ? [key, withRegion(key, "jp")] : [key];
     const edition = [key];
     const parent = curveParentKey(key);
     if (parent) edition.push(parent);
@@ -193,7 +197,7 @@ export function chapterPositionKey(ctx: Pick<CurveContext, "region" | "group" | 
 }
 
 /** Own position cell, then (CN, if enabled) the JP one; then (if enabled) the same cells pooled over WL turns. */
-export function chapterPositionLookupChain(key: string, sharing: CurveSharing): string[] {
+export function chapterPositionLookupChain(key: string, sharing: Pick<CurveSharing, "cnFromJp" | "crossTurn">): string[] {
     const regions = (k: string) => (sharing.cnFromJp && k.startsWith("cn|") ? [k, withRegion(k, "jp")] : [k]);
     const chain = regions(key);
     const pooled = curveTurnPooledKey(key);
@@ -206,7 +210,7 @@ function hasAny(xs: ReadonlyArray<unknown> | undefined): boolean {
 }
 
 /** First cell of the context's lookup chain that has data in `field`. */
-export function resolveCurveCell(ctx: CurveContext, s: Pick<CurveSection, "cells" | "cnFromJp" | "crossTurn">, field: "profiles" | "sigma"): CurveCell | null {
+export function resolveCurveCell(ctx: CurveContext, s: Pick<CurveSection, "cells" | "cnFromJp" | "crossTurn" | "cnFinaleFromJp">, field: "profiles" | "sigma"): CurveCell | null {
     for (const key of curveLookupChain(curveCellKey(ctx), s)) {
         const cell = s.cells[key];
         if (cell && hasAny(cell[field])) return cell;

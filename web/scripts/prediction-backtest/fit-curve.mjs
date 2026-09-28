@@ -59,6 +59,10 @@ export const CURVE_FIT_DEFAULTS = Object.freeze({
     turnShrink: 0,
     cnFromJp: true,
     crossTurn: true,
+    // 国服终章没有数据时借用日服同 id 终章的单元格，有数据时向它收缩（regionShrink）；不同活动的终章从不共用。
+    // 滚动回测国服 #180（242 个预测点）：线性占比 MAPE 6.82%、覆盖率 76.0%；借用日服 #180 5.79%、81.4%
+    // （T200–10000 与进度 25–75% 明显改善，T20000 起与结束前 12 小时内变差）；日服终章的预测不变。
+    cnFinaleFromJp: true,
     // sigma 向查找链下一个单元格（或线性占比的 sigma）收缩的伪样本数。
     sigmaPrior: 3,
     // 拟合章节位置修正的位置；[] = 不拟合（输出与没有该修正时相同）。加上 "other"（更早的章）：
@@ -339,7 +343,7 @@ function logRateOffsets(obs, p) {
  * 没有观测的小时段取最近有观测的段（旧数据缺最后一小时的点，记 0 会在结束前造成假的凹陷）。
  */
 function fitChapterPositionCells(scopes, cells, o) {
-    const lookup = { cells, cnFromJp: o.cnFromJp, crossTurn: o.crossTurn };
+    const lookup = { cells, cnFromJp: o.cnFromJp, crossTurn: o.crossTurn, cnFinaleFromJp: o.cnFinaleFromJp };
     const wanted = new Set(o.chapterPositions);
     const members = new Map();
     for (const sc of scopes) {
@@ -543,6 +547,7 @@ export function fitCurve(train, opts = {}) {
         trendBins: o.trendBins,
         sigmaGrid: [...o.sigmaGrid],
         cnFromJp: o.cnFromJp,
+        cnFinaleFromJp: o.cnFinaleFromJp,
         crossTurn: o.crossTurn,
         cells: Object.fromEntries(Object.keys(cells).sort().map((key) => [key, cells[key]])),
         chapterPosition,
