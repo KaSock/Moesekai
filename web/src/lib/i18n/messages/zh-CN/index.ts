@@ -2394,8 +2394,7 @@ export const zhCNMessages = {
                 manual: {
                     bonus: "活动加成（%）",
                     power: "综合力",
-                    leaderSkill: "队长技能（%）",
-                    memberSkill: "队员平均技能（%）",
+                    effectiveSkill: "实效（%）",
                     calculate: "计算",
                 },
                 direct: {
@@ -2449,7 +2448,7 @@ export const zhCNMessages = {
                 dailyManual: "每日需手动打歌",
                 dailyManualValue: "{perDay} 小时 / 天（共计约 {total} 小时）",
                 manualNeeded: "需手动打歌",
-                manualNeededValue: "{total} 小时 / 剩余 {left} 小时",
+                manualNeededValue: "{total} 小时 / 可用 {limit} 小时",
                 manualPlays: "手动 {count} 局",
                 autoRuns: "Auto {count} 次（共 {pt} PT）",
                 autoRunsTime: "Auto {count} 次（共 {pt} PT，占用约 {hours} 小时）",

@@ -2395,8 +2395,7 @@ export const enUSMessages = {
                 manual: {
                     bonus: "Event bonus (%)",
                     power: "Total power",
-                    leaderSkill: "Leader skill (%)",
-                    memberSkill: "Average member skill (%)",
+                    effectiveSkill: "Effective skill value (%)",
                     calculate: "Calculate",
                 },
                 direct: {
@@ -2450,7 +2449,7 @@ export const enUSMessages = {
                 dailyManual: "Manual play needed per day",
                 dailyManualValue: "{perDay} h/day (about {total} h in total)",
                 manualNeeded: "Manual play needed",
-                manualNeededValue: "{total} h, with {left} h left",
+                manualNeededValue: "{total} h of {limit} h available",
                 manualPlays: "{count} manual plays",
                 autoRuns: "{count} Auto runs ({pt} PT)",
                 autoRunsTime: "{count} Auto runs ({pt} PT, taking about {hours} h)",

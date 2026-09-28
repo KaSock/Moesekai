@@ -2418,8 +2418,7 @@ export const jaJPMessages = {
         manual: {
           bonus: 'イベントボーナス（%）',
           power: '総合力',
-          leaderSkill: 'リーダースキル（%）',
-          memberSkill: 'メンバー平均スキル（%）',
+          effectiveSkill: '実効値（%）',
           calculate: '計算',
         },
         direct: {
@@ -2473,7 +2472,7 @@ export const jaJPMessages = {
         dailyManual: '1日に必要な手動プレイ',
         dailyManualValue: '1日{perDay}時間（合計約{total}時間）',
         manualNeeded: '必要な手動プレイ',
-        manualNeededValue: '{total}時間 / 残り{left}時間',
+        manualNeededValue: '{total}時間 / プレイ可能{limit}時間',
         manualPlays: '手動 {count}回',
         autoRuns: 'オート {count}回（計 {pt} PT）',
         autoRunsTime: 'オート {count}回（計 {pt} PT、所要 約{hours}時間）',

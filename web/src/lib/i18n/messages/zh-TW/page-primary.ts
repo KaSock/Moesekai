@@ -1526,8 +1526,7 @@ export const zhTWPagePrimary = {
                 manual: {
                     bonus: "活動加成（%）",
                     power: "綜合力",
-                    leaderSkill: "隊長技能（%）",
-                    memberSkill: "隊員平均技能（%）",
+                    effectiveSkill: "實效（%）",
                     calculate: "計算",
                 },
                 direct: {
@@ -1581,7 +1580,7 @@ export const zhTWPagePrimary = {
                 dailyManual: "每日需手動打歌",
                 dailyManualValue: "{perDay} 小時 / 天（共計約 {total} 小時）",
                 manualNeeded: "需手動打歌",
-                manualNeededValue: "{total} 小時 / 剩餘 {left} 小時",
+                manualNeededValue: "{total} 小時 / 可用 {limit} 小時",
                 manualPlays: "手動 {count} 局",
                 autoRuns: "Auto {count} 次（共 {pt} PT）",
                 autoRunsTime: "Auto {count} 次（共 {pt} PT，佔用約 {hours} 小時）",

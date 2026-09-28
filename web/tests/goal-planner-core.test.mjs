@@ -882,6 +882,7 @@ test("WL 总榜只剩最后一章 30 分钟：与单期一样减少 Auto，结�
         [single.autoRuns, single.manualPlays, single.feasibility],
         [r.autoRuns, r.manualPlays, r.feasibility],
     );
+    approx(r.manualLimitHours, single.manualLimitHours);
 });
 
 test("剩余时间内疲劳槽不会满时，显示的每日上限为 24 小时，WL 总榜取最小值时跳过", () => {
@@ -1298,6 +1299,37 @@ test("剩余 8 小时、每日 6 小时：需手动 3.02 小时按总量和 6 �
     // 每日 2.5 小时 → 2.847 / (2.5 × 1.25) = 0.911 → 吃力
     const longer = planGoal({ ...base, now: endAt - 30 * HOUR, dailyManualHours: 2.5 });
     assert.deepEqual([longer.autoRuns, longer.manualPlays, longer.feasibility], [20, 82, "hard"]);
+});
+
+test("manualLimitHours：判定所用的可用手动小时 = min(每日小时 × 天数(至少 1 天), 扣 Auto 后的剩余时间, 疲劳槽容量)", () => {
+    // 同上 JP #218 形状，剩 8 小时、Auto 10 次 × 150 秒：扣 Auto 后空余 8 − 10 × 150 / 3600 = 7.583 小时
+    const endAt = Date.UTC(2026, 8, 28, 11, 0, 0);
+    const base = {
+        now: endAt - 8 * HOUR,
+        tzOffsetMinutes: JP_TZ,
+        endAt,
+        currentScore: 30_000_000,
+        targetScore: 33_660_000,
+        pt: pt({ manualPtPerPlay: 40_000, manualFire: 3, playsPerHour: 28.8, songSeconds: undefined, autoPtPerPlay: 20_000 }),
+        dailyManualHours: 6,
+        dailyAutoRuns: 10,
+        autoDailyLimit: 10,
+        gauge: null,
+    };
+    // 每日 6 小时：可用 6 小时，标题显示“3.0 / 可用 6.0”，与判定 3.0208 / 6 = 0.503 → 轻松一致
+    const r = planGoal(base);
+    approx(r.manualLimitHours, 6);
+    approx(r.manualHoursTotal / r.manualLimitHours, (87 / 28.8) / 6);
+    assert.equal(r.feasibility, "comfortable");
+    // 每日 24 小时：受剩余时间限制，可用 7.583 小时
+    approx(planGoal({ ...base, dailyManualHours: 24 }).manualLimitHours, 8 - (10 * 150) / 3600);
+    // 剩 30 小时、每日 2.5 小时：2.5 × 1.25 天 = 3.125 小时
+    approx(planGoal({ ...base, now: endAt - 30 * HOUR, dailyManualHours: 2.5 }).manualLimitHours, 3.125);
+    // 疲劳槽：剩 12 小时、每日 24 小时，窗口内容量 6.9 小时
+    const now = Date.UTC(2026, 8, 28, 0, 0, 0);
+    const gauged = planGoal(input({ now, endAt: now + 12 * HOUR, targetScore: 487_500, dailyManualHours: 24, gauge: TEST_GAUGE }));
+    approx(gauged.manualLimitHours, 6.9);
+    assert.equal(gauged.feasibility, "hard");
 });
 
 // ---------------------------------------------------------------------------

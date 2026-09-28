@@ -190,7 +190,7 @@ export default function ResultsPanel({ result, comparison, rules }: ResultsPanel
                                     {underDay
                                         ? t("page.predictionPlanner.results.manualNeededValue", {
                                             total: hours(result.manualHoursTotal),
-                                            left: hours(remainingHours),
+                                            limit: hours(result.manualLimitHours),
                                         })
                                         : t("page.predictionPlanner.results.dailyManualValue", {
                                             perDay: hours(result.manualHoursPerDay),

@@ -107,6 +107,8 @@ const SONG_OPTION_TOP = 10;
 const SEARCH_RESULT_LIMIT = 8;
 const GAIN_DEBOUNCE_MS = 200;
 const DECK_RESULT_LIMIT = 5;
+/** Effective skill of five cards with equal skill: 1 + 4 x 0.2 times one card's skill. */
+const EFFECTIVE_SKILL_PER_CARD = 1.8;
 
 const INPUT_CLASS = "w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-miku/30 focus:border-miku";
 const LABEL_CLASS = "block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1";
@@ -266,8 +268,7 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
 
     const [manualBonus, setManualBonus] = useState("");
     const [manualPower, setManualPower] = useState("");
-    const [manualLeaderSkill, setManualLeaderSkill] = useState("");
-    const [manualMemberSkill, setManualMemberSkill] = useState("");
+    const [manualEffectiveSkill, setManualEffectiveSkill] = useState("");
     const [manualProfile, setManualProfile] = useState<{ ctx: string; profile: PlannerDeckProfile } | null>(null);
 
     const initialDirect = value?.mode === "direct" ? value : null;
@@ -588,14 +589,15 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
     const calculateManual = () => {
         const power = parseNumberInput(manualPower);
         if (power === null || power <= 0) return;
-        const leader = parseNumberInput(manualLeaderSkill) ?? 0;
-        const member = parseNumberInput(manualMemberSkill) ?? 0;
+        // Effective skill = leader + 0.2 x the other four, which is all multi lives use, so an even spread keeps multi
+        // exact. Solo and Auto also weigh the leader alone: 160/140 decks read 0.5% high in solo, 200/100 about 3%.
+        const perCard = (parseNumberInput(manualEffectiveSkill) ?? 0) / EFFECTIVE_SKILL_PER_CARD;
         setManualProfile({
             ctx: eventCtx,
             profile: {
                 totalPower: power,
                 eventBonusRate: parseNumberInput(manualBonus) ?? 0,
-                skillScoreUps: [leader, member, member, member, member],
+                skillScoreUps: [perCard, perCard, perCard, perCard, perCard],
             },
         });
     };
@@ -879,11 +881,10 @@ export default function PtSourcePanel({ rules, server, eventId, eventType, chapt
 
             {mode === "manual" && (
                 <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <NumberField label={t("page.predictionPlanner.pt.manual.bonus")} value={manualBonus} onChange={setManualBonus} placeholder="0" />
                         <NumberField label={t("page.predictionPlanner.pt.manual.power")} value={manualPower} onChange={setManualPower} placeholder="0" />
-                        <NumberField label={t("page.predictionPlanner.pt.manual.leaderSkill")} value={manualLeaderSkill} onChange={setManualLeaderSkill} placeholder="0" />
-                        <NumberField label={t("page.predictionPlanner.pt.manual.memberSkill")} value={manualMemberSkill} onChange={setManualMemberSkill} placeholder="0" />
+                        <NumberField label={t("page.predictionPlanner.pt.manual.effectiveSkill")} value={manualEffectiveSkill} onChange={setManualEffectiveSkill} placeholder="0" />
                     </div>
                     <div className="flex justify-end">
                         <button

@@ -85,6 +85,8 @@ export interface PlannerResult {
     manualHoursTotal: number;
     /** = manualHoursTotal / remainingDays. */
     manualHoursPerDay: number;
+    /** Manual hours the verdict allows: daily hours (at least one day's worth) capped by time left after Auto and by the gauge. */
+    manualLimitHours: number;
     stamina: number;
     bigDrinks: number;
     crystals: number;

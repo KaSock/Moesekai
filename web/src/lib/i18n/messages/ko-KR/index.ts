@@ -2416,8 +2416,7 @@ export const koKRMessages = {
                 manual: {
                     bonus: "이벤트 보너스(%)",
                     power: "종합력",
-                    leaderSkill: "리더 스킬(%)",
-                    memberSkill: "멤버 평균 스킬(%)",
+                    effectiveSkill: "실효치(%)",
                     calculate: "계산",
                 },
                 direct: {
@@ -2471,7 +2470,7 @@ export const koKRMessages = {
                 dailyManual: "하루 필요 수동 플레이",
                 dailyManualValue: "하루 {perDay}시간 (총 약 {total}시간)",
                 manualNeeded: "필요 수동 플레이",
-                manualNeededValue: "{total}시간 / 남은 {left}시간",
+                manualNeededValue: "{total}시간 / 플레이 가능 {limit}시간",
                 manualPlays: "수동 {count}회",
                 autoRuns: "오토 {count}회 (총 {pt} PT)",
                 autoRunsTime: "오토 {count}회 (총 {pt} PT, 약 {hours}시간 소요)",

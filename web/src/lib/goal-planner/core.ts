@@ -192,8 +192,14 @@ function capPerDayFor(gauge: BreakGaugeRule, pt: PtPlan, windowHours: number): n
     return gaugeCapHoursPerDay(gauge, songSecondsOf(pt), pt.playsPerHour, windowHours);
 }
 
+/** Manual hours a window allows: min(daily hours x budgetDays, time left free of Auto, gauge capacity). */
+function manualLimit(budgetDays: number, dailyManualHours: number, freeHours: number, capacityHours: number | null): number {
+    const limit = Math.min(dailyManualHours * budgetDays, Math.max(0, freeHours));
+    return capacityHours !== null ? Math.min(limit, capacityHours) : limit;
+}
+
 /**
- * Manual hours over min(daily hours x budgetDays, time left free of Auto, gauge capacity), all totals over the window.
+ * Manual hours over the window's manualLimit, all totals over the window.
  * For days >= 1 this equals manualHoursPerDay over the same limits on the per-day scale.
  */
 function loadRatio(
@@ -204,9 +210,7 @@ function loadRatio(
     capacityHours: number | null,
 ): number {
     if (!(hours > 0)) return 0;
-    let limit = Math.min(dailyManualHours * budgetDays, Math.max(0, freeHours));
-    if (capacityHours !== null) limit = Math.min(limit, capacityHours);
-    return hours / limit;
+    return hours / manualLimit(budgetDays, dailyManualHours, freeHours, capacityHours);
 }
 
 /**
@@ -232,6 +236,7 @@ interface Totals {
     autoHoursTotal: number;
     manualPlays: number;
     manualHoursTotal: number;
+    manualLimitHours: number;
     stamina: number;
     gaugeCapHoursPerDay: number | null;
     feasibility: Feasibility;
@@ -249,6 +254,7 @@ function finish(t: Totals): PlannerResult {
         manualPlays: t.manualPlays,
         manualHoursTotal: t.manualHoursTotal,
         manualHoursPerDay: perDayOf(t.manualHoursTotal, t.remainingDays),
+        manualLimitHours: t.manualLimitHours,
         stamina: t.stamina,
         bigDrinks: Math.ceil(t.stamina / STAMINA_PER_BIG_DRINK),
         crystals: t.stamina * CRYSTALS_PER_STAMINA,
@@ -305,6 +311,7 @@ export function planGoal(input: PlannerInput): PlannerResult {
         autoHoursTotal: autoRuns * runHours,
         manualPlays,
         manualHoursTotal,
+        manualLimitHours: manualLimit(budgetDays, input.dailyManualHours, remainingHours - autoRuns * runHours, gaugeCapacity),
         stamina: manualStamina + autoRuns * pt.autoFire,
         gaugeCapHoursPerDay: gaugeCapPerDay,
         feasibility: gap === 0 ? "comfortable" : classify(ratio),
@@ -540,6 +547,7 @@ function planChapters(
     let autoHoursTotal = 0;
     let manualPlays = 0;
     let manualHoursTotal = 0;
+    let manualLimitHours = 0;
     let stamina = 0;
     let worstRatio = 0;
     const perChapter: ChapterPlan[] = states.map((s) => {
@@ -550,9 +558,10 @@ function planChapters(
         manualPlays += s.plays;
         manualHoursTotal += manualHours;
         stamina += staminaFor(s.plays, s.pt.manualFire) + s.autoRuns * s.pt.autoFire;
+        const freeHours = s.hours - s.autoRuns * s.autoRunHours;
+        const budgetDays = budgetDaysOf(s.days, s.end >= input.endAt);
+        manualLimitHours += manualLimit(budgetDays, input.dailyManualHours, freeHours, s.capHours);
         if (s.plays > 0) {
-            const freeHours = s.hours - s.autoRuns * s.autoRunHours;
-            const budgetDays = budgetDaysOf(s.days, s.end >= input.endAt);
             const ratio = loadRatio(manualHours, budgetDays, input.dailyManualHours, freeHours, s.capHours);
             worstRatio = Math.max(worstRatio, ratio);
         }
@@ -584,6 +593,7 @@ function planChapters(
         autoHoursTotal,
         manualPlays: unreachable ? Infinity : manualPlays,
         manualHoursTotal: unreachable ? Infinity : manualHoursTotal,
+        manualLimitHours,
         stamina: unreachable ? Infinity : stamina,
         gaugeCapHoursPerDay: gaugeCapPerDay,
         feasibility,
