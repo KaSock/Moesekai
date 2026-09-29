@@ -1,7 +1,7 @@
 /**
  * 预测页的数据与走势图：prediction-api.ts（fetchPredictionData 的 rk 与 v2 两条路径）、
  * use-prediction-event.ts 的 WL 章节视图（按本章奖励档建行）与 K 线的轮询补取，已结束活动的 rk 重试，分档卡片的指数，
- * 以及 PredictionChart 的预测显示开关、PGAIChart 的空数据显示与 ActivityStats 的空指数显示。
+ * PredictionChart 的预测显示开关、PGAIChart 的空数据显示与 ActivityStats 的空指数显示，以及 rk 活动列表失败时的主数据兜底。
  * Run with: node --test --experimental-strip-types tests/prediction-api.test.mjs
  * 规则与主数据来自 tests/fixtures/event-rules（W6 的 masterdata 夹具），模型参数为提交的 priors.json；
  * 上游（rk、rks-n v2、metadata）全部用桩替换。
@@ -630,4 +630,52 @@ test("ActivityStats: a tier without an index shows a dash; a tier with one shows
   assert.ok(html.includes('title="—">—<'), html);
   assert.ok(html.includes('title="6272">6272<'), html);
   assert.ok(!html.includes("null"), html);
+});
+
+// ---------------------------------------------------------------------------
+// 活动列表：rk 的列表请求失败时，主数据兜底只列已开始的活动
+// ---------------------------------------------------------------------------
+
+/** Masterdata events.json rows relative to now; rk's event list answers `rkReply`, v2's latest answers `v2Reply`. */
+function stubEventListFallback(region, rows, rkReply, v2Reply) {
+  const requested = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requested.push(url);
+    if (url.includes(`rk.exmeaning.com/public/events?region=${region}`)) return rkReply();
+    if (url.includes(`/${region}/master/events.json`)) return json(rows)();
+    if (url.includes(`/v2/${region}/latest`)) return v2Reply();
+    return json({ error: "not stubbed" }, 404)();
+  };
+  return requested;
+}
+
+const DAY = 24 * HOUR;
+/** Moves the clock past the 10-minute event list cache, which the hook tests above filled for both regions. */
+const pastEventListCache = (t) => t.mock.timers.enable({ apis: ["Date"], now: Date.now() + 11 * 60_000 });
+const listedEvent = (id, startInDays, days) => {
+  const startAt = Date.now() + startInDays * DAY;
+  return { id, name: `event ${id}`, eventType: "marathon", startAt, aggregateAt: startAt + days * DAY };
+};
+
+test("event list fallback: rk's list answers 525, so masterdata lists only the events that have started", async (t) => {
+  pastEventListCache(t);
+  // 国服主数据比 rk 多列出约 20 期已公布未开始的活动（2026-09-29 时是 #181–#200，rk 列到 #180）；
+  // 原样照搬时预测页默认选中 id 最大的 #200，它没有任何数据。v2 在两期之间没有榜（404）。
+  const rows = [listedEvent(178, -20, 8), listedEvent(179, -11, 8), listedEvent(180, -5, 3), listedEvent(181, 3, 8), listedEvent(200, 150, 8)];
+  const requested = stubEventListFallback("cn", rows, json({ error: "origin error" }, 525), json({ error: "not found" }, 404));
+  const list = await api.fetchEventList("cn");
+  assert.ok(requested.some((u) => u.includes("/cn/master/events.json")), requested.join("\n"));
+  assert.deepEqual(list.map((e) => [e.id, e.is_active]), [[178, false], [179, false], [180, false]]);
+});
+
+test("event list fallback: an event v2 reports as running is listed even when masterdata's start is a minute ahead", async (t) => {
+  pastEventListCache(t);
+  // 日服 #219 刚开始，本机时钟慢了一点，主数据的 startAt 还在一分钟后；v2 已经是 #219 的榜。#220 未开始。
+  const rows = [listedEvent(217, -12, 8), listedEvent(218, -6, 3), listedEvent(219, 1 / 1440, 8), listedEvent(220, 12, 8)];
+  const running = rows[2];
+  const v2 = json({ event_id: 219, region: "jp", start_at: running.startAt, end_at: running.aggregateAt, updated_at: Date.now(), is_event_aggregate: false, rankings: boardEntries(2_000_000) });
+  stubEventListFallback("jp", rows, refusedReply, v2);
+  const list = await api.fetchEventList("jp");
+  assert.deepEqual(list.map((e) => [e.id, e.is_active]), [[217, false], [218, false], [219, true]]);
 });

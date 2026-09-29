@@ -128,7 +128,9 @@ export async function fetchEventList(server: ServerType): Promise<EventListItem[
             }
 
             const now = Date.now();
-            const list: EventListItem[] = masterEvents.map(e => {
+            // Masterdata also lists announced events that have not started; rk's list has only started ones.
+            const started = masterEvents.filter(e => e.startAt <= now || e.id === activeEventId);
+            const list: EventListItem[] = started.map(e => {
                 const isOngoing = (now >= e.startAt && now <= e.aggregateAt) || (activeEventId ? e.id === activeEventId : false);
                 return {
                     id: e.id,
