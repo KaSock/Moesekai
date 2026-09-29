@@ -25,7 +25,8 @@ function StatBlock({ title, data, type }: StatBlockProps) {
                 {data.map((tier) => {
                     const index = tier.CurrentIndex == null ? '—' : formatNumber(tier.CurrentIndex);
                     return (
-                    <div key={tier.Rank} className={`p-2 sm:p-3 rounded-lg text-center border ${type === 'active' ? 'bg-red-50/50 border-red-100' : 'bg-slate-50/50 border-slate-100'}`}>
+                    // The site's dark theme is data-theme="dark" on <html>; Tailwind's dark: variant follows the OS setting.
+                    <div key={tier.Rank} className={`p-2 sm:p-3 rounded-lg text-center border ${type === 'active' ? 'bg-red-50/50 border-red-100 [:root[data-theme=dark]_&]:bg-red-500/10 [:root[data-theme=dark]_&]:border-red-500/20' : 'bg-slate-50/50 border-slate-100'}`}>
                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t("page.prediction.activityStats.rank", { rank: tier.Rank })}</div>
                         <div className="text-sm sm:text-base md:text-lg font-black text-slate-800 tabular-nums leading-tight mb-1 truncate" title={index}>
                             {index}
