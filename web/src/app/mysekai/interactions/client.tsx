@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import MainLayout from "@/components/MainLayout";
+import ExternalLink from "@/components/ExternalLink";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme, type ServerSourceType } from "@/contexts/ThemeContext";
 import { INITIAL_BROWSE, filterCatalog, supportedRegion, type BrowseState, type CatalogEntry } from "@/lib/moly/catalog";
@@ -317,6 +318,9 @@ function WorkspaceContent({ defaultTab }: { defaultTab: MolyTab }) {
                     </div>
                     <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                         {t("page.mysekaiInteractions.subtitle")}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                        {t("page.mysekaiInteractions.r6.engineSource")} <ExternalLink href="https://github.com/empty-sekai/moly" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-miku hover:underline">moly</ExternalLink>
                     </p>
                 </div>
 

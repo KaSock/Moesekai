@@ -874,6 +874,7 @@ export const koKRMessages = {
         mysekaiWorkspace: mysekaiWorkspaceMessages,
         mysekaiInteractions: {
             r5: {"pagination":"콘텐츠 페이지","previous":"이전 페이지","next":"다음 페이지","page":"{pages}페이지 중 {page}페이지","range":"{start}–{end} / {total}","preparing":"리소스 준비 중…","ready":"재생 준비 완료"},
+            r6: {"engineSource":"장면 엔진 소스:"},
             r4b: {
                 "autoLoadNotice": "처음 사용할 때 필요한 리소스가 자동으로 다운로드 및 저장됩니다. 다른 콘텐츠는 필요할 때 불러옵니다. 저장된 데이터는 리소스 관리에서 삭제할 수 있습니다.",
                 "manageResources": "리소스 관리",

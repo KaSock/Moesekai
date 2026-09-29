@@ -1,6 +1,7 @@
 export const zhTWPagePrimary = {
     mysekaiInteractions: {
             r5: {"pagination":"內容分頁","previous":"上一頁","next":"下一頁","page":"第 {page} 頁，共 {pages} 頁","range":"{start}–{end} / {total}","preparing":"正在準備資源…","ready":"準備就緒，點擊播放"},
+            r6: {"engineSource":"場景引擎開源倉庫："},
         r4b: {
             "autoLoadNotice": "首次使用會自動下載並快取必要資源，其他內容按需載入。快取可在資源管理中刪除。",
             "manageResources": "資源管理",

@@ -876,6 +876,7 @@ export const zhCNMessages = {
         mysekaiWorkspace: mysekaiWorkspaceMessages,
         mysekaiInteractions: {
             r5: {"pagination":"内容分页","previous":"上一页","next":"下一页","page":"第 {page} 页，共 {pages} 页","range":"{start}–{end} / {total}","preparing":"正在准备资源…","ready":"准备就绪，点击播放"},
+            r6: {"engineSource":"场景引擎开源仓库："},
             r4b: {
                 "autoLoadNotice": "首次使用会自动下载并缓存必要资源，后续内容按需加载。缓存可在资源管理中删除。",
                 "manageResources": "资源管理",

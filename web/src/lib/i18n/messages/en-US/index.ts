@@ -877,6 +877,7 @@ export const enUSMessages = {
         mysekaiWorkspace: mysekaiWorkspaceMessages,
         mysekaiInteractions: {
             r5: {"pagination":"Content pages","previous":"Previous page","next":"Next page","page":"Page {page} of {pages}","range":"{start}–{end} / {total}","preparing":"Preparing resources…","ready":"Ready to play"},
+            r6: {"engineSource":"Scene engine source:"},
             r4b: {
                 "autoLoadNotice": "Required resources download and cache automatically on first use. Other content loads on demand. Remove cached resources in Resource management.",
                 "manageResources": "Resources",

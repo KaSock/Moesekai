@@ -876,6 +876,7 @@ export const jaJPMessages = {
       mysekaiWorkspace: mysekaiWorkspaceMessages,
     mysekaiInteractions: {
             r5: {"pagination":"コンテンツのページ","previous":"前のページ","next":"次のページ","page":"{pages} ページ中 {page} ページ","range":"{start}–{end} / {total}","preparing":"リソースを準備中…","ready":"再生できます"},
+            r6: {"engineSource":"シーンエンジンのソース："},
         r4b: {
             "autoLoadNotice": "初回は必要なリソースを自動でダウンロード・保存します。他のコンテンツは必要に応じて読み込みます。保存済みデータはリソース管理で削除できます。",
             "manageResources": "リソース管理",
