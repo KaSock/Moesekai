@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useCallback, useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import MainLayout from "@/components/MainLayout";
 import ExternalLink from "@/components/ExternalLink";
@@ -287,6 +287,16 @@ function WorkspaceContent({ defaultTab }: { defaultTab: MolyTab }) {
             furniture: { ...INITIAL_FURNITURE }, content: null, invalidContent: false }), { scroll: "top" });
         setMode("independent"); setNotice(null);
     };
+    // A link's region decides the first view; a later change of the site's
+    // server is followed like a switch made on this page.
+    const followServer = useEffectEvent((next: ServerSourceType) => { void switchSource(next); });
+    const followedServer = useRef<ServerSourceType | null>(null);
+    useEffect(() => {
+        if (!hydrated || !hasHydratedThemeSettings) return;
+        const previous = followedServer.current;
+        followedServer.current = serverSource;
+        if (previous !== null && previous !== serverSource) followServer(serverSource);
+    }, [hydrated, hasHydratedThemeSettings, serverSource]);
 
     const share = async () => {
         const url = new URL(window.location.href);
