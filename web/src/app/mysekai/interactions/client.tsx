@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useCallback, useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import MainLayout from "@/components/MainLayout";
+import ExternalLink from "@/components/ExternalLink";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme, type ServerSourceType } from "@/contexts/ThemeContext";
 import { INITIAL_BROWSE, filterCatalog, supportedRegion, type BrowseState, type CatalogEntry } from "@/lib/moly/catalog";
@@ -103,7 +104,7 @@ function WorkspaceContent({ defaultTab }: { defaultTab: MolyTab }) {
     const contextFixture = nav.browse.fixture ? entries.get(`fixture:${nav.browse.fixture}`)?.title : undefined;
     const activeKey = live?.status.activeKey ?? null;
     const phase = closing ? "restoring" : live?.status.phase ?? (session ? "preparing" : "idle");
-    const preparing = Boolean(session && !live?.ready && boot?.phase !== "awaiting-gesture" && !runtimeError);
+    const preparing = Boolean(session && !live?.ready && !runtimeError);
     const currentAdmission = live?.selected?.key === nav.content && live.mode === "current" ? live.selected : null;
     const canPlay = !preparing && !closing && Boolean(snapshot?.available && selected && (mode === "independent" ? selected.available : currentAdmission?.available));
     const reason = mode === "current" ? currentAdmission?.reasonCode ?? null : selected?.reasonCode ?? null;
@@ -286,6 +287,16 @@ function WorkspaceContent({ defaultTab }: { defaultTab: MolyTab }) {
             furniture: { ...INITIAL_FURNITURE }, content: null, invalidContent: false }), { scroll: "top" });
         setMode("independent"); setNotice(null);
     };
+    // A link's region decides the first view; a later change of the site's
+    // server is followed like a switch made on this page.
+    const followServer = useEffectEvent((next: ServerSourceType) => { void switchSource(next); });
+    const followedServer = useRef<ServerSourceType | null>(null);
+    useEffect(() => {
+        if (!hydrated || !hasHydratedThemeSettings) return;
+        const previous = followedServer.current;
+        followedServer.current = serverSource;
+        if (previous !== null && previous !== serverSource) followServer(serverSource);
+    }, [hydrated, hasHydratedThemeSettings, serverSource]);
 
     const share = async () => {
         const url = new URL(window.location.href);
@@ -317,6 +328,9 @@ function WorkspaceContent({ defaultTab }: { defaultTab: MolyTab }) {
                     </div>
                     <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                         {t("page.mysekaiInteractions.subtitle")}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                        {t("page.mysekaiInteractions.r6.engineSource")} <ExternalLink href="https://github.com/empty-sekai/moly" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-miku hover:underline">moly</ExternalLink>
                     </p>
                 </div>
 

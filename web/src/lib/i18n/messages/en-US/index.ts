@@ -877,6 +877,7 @@ export const enUSMessages = {
         mysekaiWorkspace: mysekaiWorkspaceMessages,
         mysekaiInteractions: {
             r5: {"pagination":"Content pages","previous":"Previous page","next":"Next page","page":"Page {page} of {pages}","range":"{start}–{end} / {total}","preparing":"Preparing resources…","ready":"Ready to play"},
+            r6: {"engineSource":"Scene engine source:"},
             r4b: {
                 "autoLoadNotice": "Required resources download and cache automatically on first use. Other content loads on demand. Remove cached resources in Resource management.",
                 "manageResources": "Resources",
@@ -1037,7 +1038,7 @@ export const enUSMessages = {
                 "memoryHint": "This page has no player. Closing a player releases its scene and renderer, but browser RAM reclamation is not immediate or guaranteed. Clearing disk cache does not shrink an open player's WASM memory.",
                 "snapshot": "Snapshot {region} · {version} · {id}",
                 "requestedSnapshot": "Requested snapshot: {id}",
-                "origin": "Resource origin: {origin}",
+                "origin": "Resource location: {origin}",
                 "sameOrigin": "this site (same origin)",
                 "refresh": "Refresh usage",
                 "clearConfirm": "Delete all Moly resource caches?",

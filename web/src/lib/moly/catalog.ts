@@ -1,5 +1,5 @@
 import { mysekaiDatabaseHref } from "../mysekai-source";
-import { molyResourceOrigin, molyResourceUrl } from "./resourceOrigin";
+import { molyResourceBase, molyResourceUrl } from "./resourceBase";
 import type { MolyEntry, MolyKey, MolyRegion, MolyTab, MolyCharacter } from "./contract";
 
 export const MOLY_CONTRACT_VERSION = 2;
@@ -8,7 +8,8 @@ export interface MolyRelease {
     module: string;
     stage: string;
     contractVersion: 2;
-    resourceOrigin?: string;
+    /** Public directory the runtime fetches the engine and assets from; absent when served under /moly/. */
+    resourceBase?: string;
     engines: Record<"webgpu" | "webgl2", { downloadBytes: number; decodedBytes: number; brotliBytes?: number; gzipBytes?: number }>;
 }
 export interface ResourceSnapshot {
@@ -32,9 +33,14 @@ export interface RuntimeManifest {
     release: MolyRelease;
     snapshots: ResourceSnapshot[];
 }
+/**
+ * `detail` locates the entry's full record: a path relative to the catalog
+ * directory (schema 1), or the logical path of the content-addressed bundle
+ * holding it (schema 2; the index lists bundles and entries carry an index).
+ */
 export interface CatalogEntry extends MolyEntry { detail: string; }
 export interface ContentCatalog {
-    schemaVersion: 1;
+    schemaVersion: 1 | 2;
     snapshotId: string;
     region: MolyRegion;
     version: string;
@@ -96,35 +102,62 @@ export async function fetchRuntimeManifest(signal?: AbortSignal, pin?: { snapsho
         snapshot.releaseModule = value.release.module;
     }
     // Validate logical publication identities before applying the host's exact,
-    // trusted resource origin. The SDK and iframe remain on the site origin.
-    value.release.resourceOrigin = molyResourceOrigin() || undefined;
+    // trusted resource base. The SDK and iframe remain on the site origin.
+    value.release.resourceBase = molyResourceBase() || undefined;
     for (const snapshot of value.snapshots) {
         snapshot.assets = molyResourceUrl(snapshot.assets);
         snapshot.catalog = molyResourceUrl(snapshot.catalog);
     }
     return value;
 }
+const DETAIL_BUNDLE = /^\/moly\/catalog-store\/([a-f0-9]{64})\.json$/;
 export async function fetchContentCatalog(snapshot: Pick<ResourceSnapshot, "id" | "catalog" | "region" | "version">, signal?: AbortSignal): Promise<ContentCatalog> {
-    const catalog = await readJson<ContentCatalog>(snapshot.catalog, signal, 32 * 1048576);
-    if (catalog?.schemaVersion !== 1 || catalog.region !== snapshot.region || catalog.version !== snapshot.version || catalog.snapshotId !== snapshot.id
+    const catalog = await readJson<ContentCatalog & { details?: unknown }>(snapshot.catalog, signal, 32 * 1048576);
+    const bundles = catalog?.schemaVersion === 2 && Array.isArray(catalog.details) && catalog.details.length <= 4096
+        && catalog.details.every(path => typeof path === "string" && DETAIL_BUNDLE.test(path)) ? catalog.details as string[] : null;
+    if ((catalog?.schemaVersion !== 1 && !bundles) || catalog.region !== snapshot.region || catalog.version !== snapshot.version || catalog.snapshotId !== snapshot.id
         || !Array.isArray(catalog.entries) || catalog.entries.length > 100000 || !Array.isArray(catalog.characters)) throw new Error("moly_catalog_mismatch");
     const seen = new Set<string>();
     for (const entry of catalog.entries) {
+        const bundle: unknown = entry.detail;
         if (!validContentKey(entry.key) || seen.has(entry.key) || !Array.isArray(entry.fixtureIds) || !Array.isArray(entry.unitIds)
             || typeof entry.available !== "boolean" || !entry.presentation
-            || !/^entries\/[a-z0-9-]+\.json$/.test(entry.detail)) throw new Error("moly_catalog_invalid");
+            || (bundles ? !(Number.isSafeInteger(bundle) && (bundle as number) >= 0 && (bundle as number) < bundles.length)
+                : !/^entries\/[a-z0-9-]+\.json$/.test(entry.detail))) throw new Error("moly_catalog_invalid");
+        if (bundles) entry.detail = bundles[bundle as number];
         seen.add(entry.key);
     }
     return catalog;
 }
+// A bundle is named by the SHA-256 of its bytes and shared by every snapshot
+// that lists it, so its integrity is checked by hash instead of snapshot id.
+async function readDetailBundle(path: string, sha256: string, signal?: AbortSignal): Promise<Record<string, MolyEntry>> {
+    const response = await fetch(molyResourceUrl(path), { signal, credentials: "omit", redirect: "error", cache: "force-cache" });
+    if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw new Error(`moly_http_${response.status}`);
+    if (Number(response.headers.get("content-length")) > 4 * 1048576) throw new Error("moly_response_too_large");
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength > 4 * 1048576) throw new Error("moly_response_too_large");
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), byte => byte.toString(16).padStart(2, "0")).join("");
+    const value = digest === sha256 ? JSON.parse(new TextDecoder().decode(bytes)) : null;
+    if (value?.schemaVersion !== 2 || !value.entries || typeof value.entries !== "object") throw new Error("moly_detail_mismatch");
+    return value.entries;
+}
 export async function fetchContentDetail(snapshot: Pick<ResourceSnapshot, "id" | "catalog">, entry: Pick<CatalogEntry, "key" | "detail">, signal?: AbortSignal): Promise<MolyEntry> {
+    const bundle = DETAIL_BUNDLE.exec(entry.detail);
+    if (bundle) {
+        const value = (await readDetailBundle(entry.detail, bundle[1], signal))[entry.key];
+        if (value?.key !== entry.key) throw new Error("moly_detail_mismatch");
+        return value;
+    }
     const value = await readJson<{ schemaVersion: 1; snapshotId: string; entry: MolyEntry }>(`${snapshot.catalog.slice(0, -"index.json".length)}${entry.detail}`, signal, 2 * 1048576, true);
     if (value?.schemaVersion !== 1 || value.snapshotId !== snapshot.id || value.entry?.key !== entry.key) throw new Error("moly_detail_mismatch");
     return value.entry;
 }
+// Packed publications name each card image by its content address.
+const STORE_IMAGE = /^\/moly\/asset-store\/blobs\/([a-f0-9]{2})\/\1[a-f0-9]{62}\.bin$/;
 export function resourceImage(snapshot: ResourceSnapshot, image: string | null | undefined): string | undefined {
-    if (snapshot.packs) return undefined;
     if (!image) return undefined;
+    if (snapshot.packs) return STORE_IMAGE.test(image) ? molyResourceUrl(image) : undefined;
     const path = image.replace(/^moly:\/\//, "");
     if (path.startsWith("/") || path.includes(":") || path.includes("\\") || path.split("/").some(part => !part || part === ".." || part === ".")) return undefined;
     return snapshot.assets + path.split("/").map(encodeURIComponent).join("/");
