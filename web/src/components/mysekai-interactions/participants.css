@@ -1,0 +1,100 @@
+/* Cleaned participants & pagination styles for MYSEKAI interactions */
+.interaction-browser {
+    scroll-margin-top: 96px;
+}
+
+.interaction-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-soft);
+}
+
+.interaction-page-range {
+    font-size: 0.76rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.interaction-page-controls,
+.interaction-page-slot {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.interaction-page-controls button {
+    display: grid;
+    place-items: center;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--text-body);
+    font-size: 0.81rem;
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.interaction-page-controls button:hover:not(:disabled) {
+    background: var(--surface-soft);
+    border-color: var(--border-soft);
+}
+
+.interaction-page-controls button[aria-current="page"] {
+    background: var(--accent-soft);
+    border-color: var(--color-miku);
+    font-weight: 750;
+    color: var(--text-strong);
+}
+
+.interaction-page-controls button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.interaction-page-ellipsis {
+    display: grid;
+    place-items: center;
+    min-width: 16px;
+    color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+    .interaction-pagination {
+        justify-content: center;
+        gap: 10px;
+    }
+    .interaction-page-range {
+        width: 100%;
+        text-align: center;
+    }
+    .interaction-page-controls,
+    .interaction-page-slot {
+        gap: 2px;
+    }
+    .interaction-page-controls button {
+        min-width: 36px;
+        min-height: 36px;
+        padding: 6px;
+    }
+    .interaction-page-ellipsis {
+        min-width: 12px;
+    }
+}
+
+@media (forced-colors: active) {
+    .interaction-page-controls button {
+        border: 1px solid CanvasText;
+    }
+    .interaction-page-controls button[aria-current="page"] {
+        outline: 2px solid Highlight;
+    }
+}

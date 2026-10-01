@@ -20,6 +20,10 @@ ENV NODE_ENV=production
 ENV NEXT_PUBLIC_API_URL=
 # OAuth2 client ID (baked into client JS at build time)
 ENV NEXT_PUBLIC_OAUTH2_CLIENT_ID=snowy-viewer-public
+# Optional override of the checked-in Moly publication directory. Empty uses
+# the source default, so automatic deployments need no platform variable.
+ARG NEXT_PUBLIC_MOLY_RESOURCE_BASE=
+ENV NEXT_PUBLIC_MOLY_RESOURCE_BASE=$NEXT_PUBLIC_MOLY_RESOURCE_BASE
 # Public lyrics artifacts. Production accepts only a credential-free HTTPS directory;
 # sitemap generation derives index.json from the same explicitly supplied source.
 # CI may mount a short-lived synthetic CA only for the required image build contract;
