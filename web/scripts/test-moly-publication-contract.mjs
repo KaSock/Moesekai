@@ -66,10 +66,18 @@ try {
     assert.equal(requests[0].options.redirect, "error");
 
     delete process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE;
-    const local = await serve(manifest(), () => fetchRuntimeManifest());
-    assert.equal(local.release.resourceBase, undefined, "same-origin publication needs no configured resource base");
-    assert.equal(local.snapshots[0].assets, "/moly/snapshots/cn-6.0.0-example/assets/");
-    assert.equal(local.snapshots[0].catalog, "/moly/snapshots/cn-6.0.0-example/catalog/index.json");
+    const defaultPublication = await serve(manifest(), () => fetchRuntimeManifest());
+    assert.equal(defaultPublication.release.resourceBase, "https://assets.pjsk.moe/sekai-extra-assets/", "runtime uses the checked-in publication without an environment override");
+    assert.equal(defaultPublication.release.module, "/moly/releases/stage-new/embed.mjs", "SDK remains same-origin with the default publication");
+    assert.equal(defaultPublication.release.stage, "/moly/releases/stage-new/stage.html", "iframe remains same-origin with the default publication");
+    assert.equal(defaultPublication.snapshots[0].assets, "https://assets.pjsk.moe/sekai-extra-assets/snapshots/cn-6.0.0-example/assets/");
+    assert.equal(defaultPublication.snapshots[0].catalog, "https://assets.pjsk.moe/sekai-extra-assets/snapshots/cn-6.0.0-example/catalog/index.json");
+    const configURL = await moduleURL("../next.config.ts", { "./src/lib/moly/resourceBase": resourceBase });
+    const { default: nextConfig } = await import(configURL);
+    assert.deepEqual((await nextConfig.rewrites()).afterFiles.find(rule => rule.source === "/moly/:path*"), {
+        source: "/moly/:path*",
+        destination: `${defaultPublication.release.resourceBase}:path*`,
+    }, "same-origin proxy and runtime use the same default publication");
     const cachePanel = await readFile(new URL("../src/components/mysekai-interactions/ResourceCachePanel.tsx", import.meta.url), "utf8");
     assert.ok(cachePanel.includes("useRuntimeManifest(retry)"), "resource management discovers publications and can retry failed discovery");
     assert.ok(!cachePanel.includes("molyResourceBase"), "resource configuration is not deployment status");

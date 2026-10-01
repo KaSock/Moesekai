@@ -18,7 +18,7 @@ React 管理检索、详情、选择、URL 与宿主 UI。iframe 内的原 Rust 
 
 ## 资源与部署
 
-应用镜像不包含游戏资源与运行时产物。部署只有一个配置项：`NEXT_PUBLIC_MOLY_RESOURCE_BASE`，指向发布目录，**包含 bucket 路径并以 `/` 结尾**，例如 `https://assets.example.com/bucket/`。留空时网站其余部分照常运行，互动入口显示资源未部署。
+应用镜像不包含游戏资源与运行时产物。源码在 `web/src/lib/moly/resourceBase.ts` 中给出默认发布目录 `https://assets.pjsk.moe/sekai-extra-assets/`；普通构建和 Zeabur 自动部署无需设置镜像变量即可使用它。`NEXT_PUBLIC_MOLY_RESOURCE_BASE` 仅作为可选覆盖，不设置、空字符串或只有空白时都使用默认目录。覆盖值指向发布目录，**包含 bucket 路径并以 `/` 结尾**，例如 `https://assets.example.com/bucket/`。
 
 发布里的路径是逻辑路径：manifest 写 `/moly/releases/<id>/...`、`/moly/snapshots/<id>/...`。宿主把逻辑路径 `/moly/<尾部>` 映射为 `<资源目录><尾部>`，对象存储里的对象键就是 `<尾部>`（bucket 内不另加前缀）。映射只在宿主一处完成（`web/src/lib/moly/resourceBase.ts`），不依赖 CDN 路径改写。注意不能用 `new URL("/moly/...", base)` 解析，那会丢掉 bucket 路径。
 
@@ -30,22 +30,18 @@ iframe 必须与宿主页面同源，宿主才能在用户点击时同步转交�
 | 引擎 JS 胶水与 WASM（`releases/<id>/pkg/`） | 浏览器直连资源目录 |
 | 目录索引、详情、头像、家具图片、场景模型、贴图、音频 | 浏览器直连资源目录 |
 
-宿主把校验过的资源目录交给 stage（`resourceBase`），runtime 据此解析引擎与资源地址，大体积字节不经过应用服务器。未配置时不建立该代理，`/moly/` 没有提供方。
+宿主把校验过的资源目录交给 stage（`resourceBase`），runtime 据此解析引擎与资源地址，大体积字节不经过应用服务器。没有环境变量覆盖时，代理、目录读取和 runtime 都使用同一个源码默认目录；SDK、iframe 与 worker 的请求仍保持同源。
 
 资源目录下保存完整的版本化 release 与 snapshot（目录、详情、图片与全部被引用的场景资源），或 content-addressed asset-store；`manifest.json` 是当前发布的发现入口。已发布 ID 下的字节不可覆盖。
 
-构建与运行示意（替换成部署配置）：
+使用默认发布目录构建与运行，无需部署平台配置：
 
 ```sh
-export NEXT_PUBLIC_MOLY_RESOURCE_BASE=https://assets.example.com/bucket/
-docker build \
-  --build-arg NEXT_PUBLIC_MOLY_RESOURCE_BASE="$NEXT_PUBLIC_MOLY_RESOURCE_BASE" \
-  -t moesekai:local .
-
+docker build -t moesekai:local .
 docker run --rm -p 8080:8080 moesekai:local
 ```
 
-`NEXT_PUBLIC_*` 由 Next.js 在构建时内联，改变资源目录需要重建前端/镜像；只在 `docker run -e` 添加该变量不会更新已有客户端。直接构建 Next 时在 `bun run --cwd web build:next` 之前设置同名变量。开发 compose 会读取根目录 `.env`（参见 `.env.example`）；直接 Next 开发可用 `web/.env.local`。外部 CI 必须将同名变量显式传给 Docker `build-args`，不能仅给部署容器设置环境变量。
+如需使用另一份发布，可在构建前设置 `NEXT_PUBLIC_MOLY_RESOURCE_BASE`（Docker 用 `--build-arg NEXT_PUBLIC_MOLY_RESOURCE_BASE=https://assets.example.com/bucket/`）。`NEXT_PUBLIC_*` 由 Next.js 在构建时内联，改变默认目录或覆盖值都需要重建前端/镜像；只在 `docker run -e` 添加该变量不会更新已有客户端。直接构建 Next 时在 `bun run --cwd web build:next` 之前设置同名变量。开发 compose 会读取根目录 `.env`（参见 `.env.example`）；直接 Next 开发可用 `web/.env.local`。只有需要覆盖默认目录时，外部 CI 才需要将同名变量显式传给 Docker `build-args`。
 
 资源目录必须是规范形式：HTTPS、含非根路径、以 `/` 结尾，不带查询、片段、凭据、反斜杠或百分号转义。不合规的值在读取 `next.config.ts` 时即报错、服务不会启动。本地联调 `/moly/` 时指向一个可用的 HTTPS 发布目录。
 

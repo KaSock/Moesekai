@@ -2,9 +2,14 @@ import assert from "node:assert/strict";
 
 const { molyResourceBase, molyResourceUrl } = await import("../src/lib/moly/resourceBase.ts");
 
-delete process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE;
-assert.equal(molyResourceBase(), "");
-assert.equal(molyResourceUrl("/moly/snapshots/example/assets/a.bin"), "/moly/snapshots/example/assets/a.bin");
+// An ordinary Docker/Zeabur build needs no platform configuration. Docker
+// and development compose both pass an empty string when no override is set.
+for (const value of [undefined, "", "   "]) {
+    if (value === undefined) delete process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE;
+    else process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE = value;
+    assert.equal(molyResourceBase(), "https://assets.pjsk.moe/sekai-extra-assets/");
+    assert.equal(molyResourceUrl("/moly/snapshots/example/assets/a.bin"), "https://assets.pjsk.moe/sekai-extra-assets/snapshots/example/assets/a.bin");
+}
 
 // The bucket segment is part of every public URL; resolving an absolute
 // /moly/ path against the base would drop it.

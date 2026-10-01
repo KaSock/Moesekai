@@ -2,16 +2,17 @@
  * Public directory holding the Moly publication: `manifest.json`, the cache
  * worker, and the immutable `releases/`, `snapshots/` and `asset-store/`
  * trees. It includes the provider path (for an S3 bucket, the bucket segment)
- * and ends in "/", e.g. `https://assets.example.com/bucket/`. Empty means the
- * feature is not deployed.
+ * and ends in "/", e.g. `https://assets.example.com/bucket/`. Builds use the
+ * checked-in publication directory unless a non-empty override is supplied.
  *
  * The value must already be canonical: the proxy destination in
  * next.config.ts and the URLs the client builds both come from here, and a
  * value that the URL parser would rewrite could make them disagree.
  */
+const DEFAULT_MOLY_RESOURCE_BASE = "https://assets.pjsk.moe/sekai-extra-assets/";
+
 export function molyResourceBase(): string {
-    const raw = process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE?.trim() || "";
-    if (!raw) return "";
+    const raw = process.env.NEXT_PUBLIC_MOLY_RESOURCE_BASE?.trim() || DEFAULT_MOLY_RESOURCE_BASE;
     let parsed: URL;
     try {
         parsed = new URL(raw);
