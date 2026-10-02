@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import RankChangeBadge from "@/components/realtime-ranking/RankChangeBadge";
+import RankBadge from "@/components/realtime-ranking/RankBadge";
 import PlayerHonorPreview from "@/components/realtime-ranking/PlayerHonorPreview";
 import SekaiCardThumbnail from "@/components/cards/SekaiCardThumbnail";
 import { getCharacterIconUrl } from "@/lib/assets";
@@ -212,10 +213,11 @@ export default function RankingRow({ entry, masterData, assetSource, secondsSinc
 
             <div className="relative z-10 flex w-full items-center px-3 py-2.5 sm:py-3">
                 {/* Rank # */}
-                <div className="w-10 shrink-0 text-center sm:w-12">
-                    <span className={`inline-flex items-center justify-center rounded-md border px-1.5 py-0.5 text-[11px] font-black leading-none ${isTopThree ? topThreeBadge[entry.rank] : "border-slate-200 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"}`}>
-                        #{entry.rank}
-                    </span>
+                <div className="w-12 shrink-0 text-center sm:w-14">
+                    <RankBadge
+                        rank={entry.rank}
+                        toneClassName={isTopThree ? topThreeBadge[entry.rank] : "border-slate-200 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"}
+                    />
                     {isExtendedTier && (
                         <div className="mt-0.5 text-[8px] font-medium text-slate-400 dark:text-slate-500">{t("page.realtimeRanking.list.extended")}</div>
                     )}
@@ -584,7 +586,7 @@ function ChurnRow({ churnEntry, userId, rank, churnData, onShowParkingPeriods }:
             {/* Churn grid row */}
             <div className="flex items-center gap-2">
                 {/* 48H total */}
-                <div className="shrink-0 text-center w-10 sm:w-12">
+                <div className="shrink-0 text-center w-12 sm:w-14">
                     <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">48H</span>
                     <div className="text-xs font-black text-miku">{churnEntry.churn_48h}</div>
                 </div>
@@ -624,7 +626,7 @@ function ChurnRow({ churnEntry, userId, rank, churnData, onShowParkingPeriods }:
             </div>
 
             {/* Speed and churn stats row */}
-            <div className="relative mt-1.5 pl-[calc(2.5rem+0.5rem)] sm:pl-[calc(3rem+0.5rem)]">
+            <div className="relative mt-1.5 pl-[calc(3rem+0.5rem)] sm:pl-[calc(3.5rem+0.5rem)]">
                 <div
                     className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:gap-y-1"
                     style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
@@ -734,7 +736,7 @@ function TierLineChurnRow({ churnEntry }: { churnEntry: ChurnRankingEntry }) {
 
     return (
         <div className="px-3 pb-2.5 pt-0.5">
-            <div className="relative pl-[calc(2.5rem+0.5rem)] sm:pl-[calc(3rem+0.5rem)]">
+            <div className="relative pl-[calc(3rem+0.5rem)] sm:pl-[calc(3.5rem+0.5rem)]">
                 <div
                     className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:gap-y-1"
                     style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}

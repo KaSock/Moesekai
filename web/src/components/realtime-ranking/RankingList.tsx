@@ -48,7 +48,7 @@ export default function RankingList({
         <div className="overflow-hidden rounded-2xl ios-glass-card">
             {/* Table header */}
             <div className="flex items-center border-b border-slate-200/50 bg-slate-50/50 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:border-slate-700/30 dark:bg-slate-800/30 dark:text-slate-500">
-                <div className="w-10 shrink-0 text-center sm:w-12">{t("page.realtimeRanking.list.rank")}</div>
+                <div className="w-12 shrink-0 text-center sm:w-14">{t("page.realtimeRanking.list.rank")}</div>
                 <div className="ml-2 flex-1">{t("page.realtimeRanking.list.playerInfo")}</div>
                 <div className="w-32 shrink-0 text-right sm:w-40">{t("page.realtimeRanking.list.score")}</div>
             </div>
